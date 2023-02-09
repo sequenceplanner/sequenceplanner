@@ -8,9 +8,7 @@ pub struct Variable {
 }
 
 impl Variable {
-    pub fn new(
-        name: &str, value_type: SPValueType, domain: Vec<SPValue>,
-    ) -> Variable {
+    pub fn new(name: &str, value_type: SPValueType, domain: Vec<SPValue>) -> Variable {
         let path = SPPath::from_string(name);
         Variable {
             path,
@@ -36,5 +34,4 @@ impl Variable {
     pub fn path(&self) -> &SPPath {
         &self.path
     }
-
 }

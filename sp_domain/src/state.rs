@@ -140,7 +140,7 @@ impl SPStateJson {
             obj.iter()
                 .flat_map(|(k, v)| {
                     let mut p = if k != &"0".to_string() {
-                        SPPath::from_string(&k)
+                        SPPath::from_string(k)
                     } else {
                         SPPath::new()
                     };
@@ -209,7 +209,7 @@ impl SPStateJson {
                     }
 
                     let mut map = serde_json::Map::new();
-                    map.insert("0".to_string(), x.clone());
+                    map.insert("0".to_string(), x);
                     insert(&mut map, &p.drop_root(), v);
                     let mut ch = xs
                         .entry(&root)
@@ -377,12 +377,12 @@ impl SPState {
     }
 
     pub fn add_state_variable(&mut self, path: SPPath, value: StateValue) {
-        if self.index.contains_key(&path) {
-            self.values[*self.index.get(&path).unwrap()] = value;
-        } else {
+        if let std::collections::hash_map::Entry::Vacant(e) = self.index.entry(path.clone()) {
             self.values.push(value);
-            self.index.insert(path, self.values.len() - 1);
+            e.insert(self.values.len() - 1);
             self.id = Uuid::new_v4(); // the index has changed and it is probably better to reload
+        } else {
+            self.values[*self.index.get(&path).unwrap()] = value;
         }
     }
     pub fn add_state_variables(&mut self, map: Vec<(SPPath, StateValue)>) {
@@ -572,7 +572,7 @@ impl SPState {
 
     pub fn next(&mut self, state_path: &StatePath, value: SPValue) -> SPResult<()> {
         if !self.check_state_path(state_path) {
-            panic!("The state path is wrong: {:?}", state_path);
+            panic!("The state path is wrong: {state_path:?}");
         // TODO: Probably try with the path. But for now, we panic to find bugs in the runner.
         //Err(SPError::No(format!("The state path is not ok: sp_id:{}, s_id:{}, s_len:{}, index:{}", state_path.state_id,self.id, self.values.len(),state_path.index)))
         } else if !self.values[state_path.index].next(value) {
@@ -584,10 +584,10 @@ impl SPState {
         }
     }
     pub fn next_from_path(&mut self, path: &SPPath, value: SPValue) -> SPResult<()> {
-        if let Some(sp) = self.state_path(&path) {
+        if let Some(sp) = self.state_path(path) {
             self.next(&sp, value)
         } else {
-            Err(SPError::No(format! {"Can not find the path: {:?}", path}))
+            Err(SPError::No(format!("Can not find the path: {path:?}")))
         }
     }
     pub fn force(&mut self, state_path: &StatePath, value: &SPValue) -> SPResult<()> {
@@ -605,10 +605,10 @@ impl SPState {
         }
     }
     pub fn force_from_path(&mut self, path: &SPPath, value: &SPValue) -> SPResult<()> {
-        if let Some(sp) = self.state_path(&path) {
-            self.force(&sp, &value)
+        if let Some(sp) = self.state_path(path) {
+            self.force(&sp, value)
         } else {
-            Err(SPError::No(format! {"Can not find the path: {:?}", path}))
+            Err(SPError::No(format!("Can not find the path: {path:?}")))
         }
     }
     pub fn revert_next(&mut self, state_path: &StatePath) -> SPResult<()> {
@@ -626,10 +626,10 @@ impl SPState {
         }
     }
     pub fn revert_next_from_path(&mut self, path: &SPPath) -> SPResult<()> {
-        if let Some(sp) = self.state_path(&path) {
+        if let Some(sp) = self.state_path(path) {
             self.revert_next(&sp)
         } else {
-            Err(SPError::No(format! {"Can not find the path: {:?}", path}))
+            Err(SPError::No(format!("Can not find the path: {path:?}")))
         }
     }
 
@@ -693,13 +693,13 @@ impl fmt::Display for SPState {
             let next = val
                 .next
                 .as_ref()
-                .map_or("".to_string(), |x| format!("- n: {}", x));
+                .map_or("".to_string(), |x| format!("- n: {x}"));
             let prev = val
                 .prev
                 .as_ref()
-                .map_or("".to_string(), |x| format!("- p: {}", x));
+                .map_or("".to_string(), |x| format!("- p: {x}"));
 
-            buf.push(format!("{}: {} {} {}", p, current, next, prev));
+            buf.push(format!("{p}: {current} {next} {prev}"));
         }
         write!(f, "{}", buf.join("\n"))
     }
@@ -713,7 +713,7 @@ impl<'a> fmt::Display for StateProjection<'a> {
         let mut buf = Vec::new();
         for (p, val) in proj.state {
             let current = val.current.to_string();
-            buf.push(format!("{}: {}", p, current));
+            buf.push(format!("{p}: {current}"));
         }
         write!(f, "\n{}", buf.join("\n"))
     }
@@ -876,8 +876,8 @@ mod sp_value_test {
         );
         println!("rec: {}", serde_json::to_string_pretty(&json_rec).unwrap());
 
-        println!("from_flat: {}", &from_flat);
-        println!("from_rec_flat: {}", &from_rec_flat);
+        println!("from_flat: {from_flat}");
+        println!("from_rec_flat: {from_rec_flat}");
 
         assert_eq!(from_flat, from_rec_flat);
         assert_eq!(from_flat, s);

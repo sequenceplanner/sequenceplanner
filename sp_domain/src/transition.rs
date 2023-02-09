@@ -11,9 +11,7 @@ pub struct Transition {
 }
 
 impl Transition {
-    pub fn new(name: &str,
-               guard: Predicate,
-               actions: Vec<Action>) -> Self {
+    pub fn new(name: &str, guard: Predicate, actions: Vec<Action>) -> Self {
         let path = SPPath::from_string(name);
         Transition {
             path,
@@ -51,13 +49,12 @@ impl Transition {
     pub fn path(&self) -> &SPPath {
         &self.path
     }
-
 }
 
 impl fmt::Display for Transition {
     fn fmt(&self, fmtr: &mut fmt::Formatter<'_>) -> fmt::Result {
         let s = format!("{}: {}/{:?}", self.path(), self.guard, self.actions);
-        write!(fmtr, "{}", &s)
+        write!(fmtr, "{s}")
     }
 }
 
@@ -70,14 +67,11 @@ impl EvaluatePredicate for Transition {
 impl NextAction for Transition {
     fn next(&self, state: &mut SPState) -> SPResult<()> {
         for a in self.actions.iter() {
-            if let Err(e) = a.next(state) {
-                return Err(e);
-            }
+            a.next(state)?;
         }
         Ok(())
     }
 }
-
 
 #[cfg(test)]
 mod test_items {

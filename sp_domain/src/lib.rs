@@ -45,7 +45,7 @@ pub enum SPError {
     Undefined,
 }
 
-impl std::convert::From<serde_json::Error>  for SPError {
+impl std::convert::From<serde_json::Error> for SPError {
     fn from(e: serde_json::Error) -> Self {
         SPError::from_any(e)
     }
@@ -53,7 +53,7 @@ impl std::convert::From<serde_json::Error>  for SPError {
 
 impl SPError {
     pub fn from_any<T: Display>(x: T) -> SPError {
-        SPError::No(format!("{}", x))
+        SPError::No(format!("{x}"))
     }
 }
 
@@ -61,7 +61,7 @@ impl fmt::Display for SPError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             SPError::Undefined => write!(f, "An undefined SP error!"),
-            SPError::No(s) => write!(f, "Oh No: {}", s),
+            SPError::No(s) => write!(f, "Oh No: {s}"),
         }
     }
 }

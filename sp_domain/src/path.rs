@@ -28,7 +28,11 @@ impl SPPath {
         SPPath { path: xs }
     }
     pub fn from_string(s: &str) -> SPPath {
-        let res: Vec<&str> = s.trim_start_matches('/').trim_end_matches('/').split('/').collect();
+        let res: Vec<&str> = s
+            .trim_start_matches('/')
+            .trim_end_matches('/')
+            .split('/')
+            .collect();
         SPPath::from_slice(&res)
     }
     pub fn add_child(&self, sub: &str) -> Self {
@@ -75,8 +79,7 @@ impl SPPath {
             Ok(())
         } else {
             Err(SPError::No(format!(
-                "cannot drop parent as it does not exist: {} - {}",
-                self, parent
+                "cannot drop parent as it does not exist: {self} - {parent}"
             )))
         }
     }
