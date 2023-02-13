@@ -1,7 +1,7 @@
 use which;
 
 pub fn find_nuxmv() -> &'static str {
-    let supported = &[ "nuXmv", "nuxmv", "nusmv", "NuSMV" ];
+    let supported = &["nuXmv", "nuxmv", "nusmv", "NuSMV"];
     for f in supported.iter() {
         if which::which(f).is_ok() {
             return f;

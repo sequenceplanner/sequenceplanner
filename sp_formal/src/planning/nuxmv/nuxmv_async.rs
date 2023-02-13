@@ -1,3 +1,4 @@
+use super::find_binary;
 use futures::future::select_all;
 use std::future::Future;
 use std::pin::Pin;
@@ -7,7 +8,6 @@ use std::time::Duration;
 use tokio::io::AsyncWriteExt;
 use tokio::process::Command;
 use tokio::time::timeout;
-use super::find_binary;
 
 pub type NuxmvOutput = (u32, String, String);
 
@@ -44,7 +44,7 @@ async fn call_nuxmv_async(
         .spawn()?;
 
     let mut stdin = process.stdin.take().unwrap();
-    stdin.write(command.as_bytes()).await?;
+    stdin.write_all(command.as_bytes()).await?;
 
     let result = process.wait_with_output().await?;
 
@@ -69,21 +69,18 @@ async fn search_heuristic(
     let mut tasks = Vec::new();
 
     // steps 1..cutoff, normal incremental solver
-    let command = format!(
-        "go_bmc\ncheck_ltlspec_bmc_inc -k {}\nshow_traces -v\nquit\n",
-        cutoff
-    );
+    let command = format!("go_bmc\ncheck_ltlspec_bmc_inc -k {cutoff}\nshow_traces -v\nquit\n",);
     let fut = Box::pin(call_nuxmv_async(filename.clone(), command, cutoff));
-    tasks.push(Box::pin(timeout(max_time, WrappedWorkTask::from(cutoff, fut))));
+    tasks.push(Box::pin(timeout(
+        max_time,
+        WrappedWorkTask::from(cutoff, fut),
+    )));
 
     // solve one instance at a time concurrently for bounds above the cutoff
     // for i in ((cutoff+1)..max_steps).step_by(3) { // only look at every third lengths
     for i in (cutoff + 1)..max_steps {
         // only look at every third lengths
-        let command = format!(
-            "go_bmc\ncheck_ltlspec_bmc_onepb -k {}\nshow_traces -v\nquit\n",
-            i
-        );
+        let command = format!("go_bmc\ncheck_ltlspec_bmc_onepb -k {i}\nshow_traces -v\nquit\n",);
         let fut = Box::pin(call_nuxmv_async(filename.clone(), command, i));
         tasks.push(Box::pin(timeout(max_time, WrappedWorkTask::from(i, fut))));
     }
@@ -104,7 +101,7 @@ async fn search_heuristic(
                 }
                 one = select_all(remaining);
                 continue;
-            },
+            }
         };
 
         if !r.contains("Trace Type: Counterexample") {
@@ -147,20 +144,17 @@ async fn search_heuristic(
             let mut one = select_all(remaining);
             loop {
                 let (x, _, mut remaining) = one.await;
-                match x {
-                    // outer timeout, io error, inner (global) timeout
-                    Result::Ok(Result::Ok(Result::Ok((c, r, e)))) => {
-                        if r.contains("Trace Type: Counterexample") {
-                            // save solution
-                            solutions.push((c, r, e));
-                            // stop looking for longer plans
-                            remaining.retain(|f| f.get_ref().get_ref().max_steps < c);
-                        } else {
-                            // stop looking for shorter plans
-                            remaining.retain(|f| f.get_ref().get_ref().max_steps > c);
-                        }
+                // outer timeout, io error, inner (global) timeout
+                if let Result::Ok(Result::Ok(Result::Ok((c, r, e)))) = x {
+                    if r.contains("Trace Type: Counterexample") {
+                        // save solution
+                        solutions.push((c, r, e));
+                        // stop looking for longer plans
+                        remaining.retain(|f| f.get_ref().get_ref().max_steps < c);
+                    } else {
+                        // stop looking for shorter plans
+                        remaining.retain(|f| f.get_ref().get_ref().max_steps > c);
                     }
-                    _ => {}
                 }
                 if remaining.is_empty() {
                     break;

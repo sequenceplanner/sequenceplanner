@@ -7,7 +7,7 @@ use sp_domain::*;
 pub struct TransitionSystemModel {
     pub name: String,
     pub vars: Vec<Variable>,
-    pub state_predicates: Vec<Variable>,
+    pub state_predicates: Vec<NamedPredicate>,
     pub transitions: Vec<Transition>,
-//    pub invariants: Vec<Specification>,
+    pub invariants: Vec<NamedPredicate>,
 }

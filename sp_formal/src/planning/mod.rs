@@ -1,6 +1,6 @@
+use crate::TransitionSystemModel;
 use serde::{Deserialize, Serialize};
 use sp_domain::*;
-use crate::TransitionSystemModel;
 use std::collections::HashMap;
 
 #[derive(Debug, PartialEq, Serialize, Deserialize, Clone, Default)]
@@ -53,12 +53,12 @@ pub fn plan_with_cache(
         .sorted()
         .state
         .iter()
-        .filter(|(k, _)| model.vars.iter().any(|v| &v.path() == k))
+        .filter(|(k, _)| model.vars.iter().any(|v| &&v.path == k))
         .map(|(k, v)| {
             let s = format!("{}{}", k, serde_json::to_string(v.value()).unwrap());
             s
         })
-        .fold("".to_string(), |acum, s| format!("{}{}", acum, s));
+        .fold("".to_string(), |acum, s| format!("{acum}{s}"));
 
     // serialize goals
     let goal_str = goals
@@ -69,7 +69,7 @@ pub fn plan_with_cache(
             } else {
                 "".to_string()
             };
-            format!("{}+{}", g, i)
+            format!("{g}+{i}")
         })
         .collect::<Vec<_>>()
         .join("");
@@ -97,12 +97,16 @@ pub fn plan_with_cache(
         );
     }
 
-    let result = NuXmvPlanner::plan(model, &goals, state, max_steps);
+    let result = NuXmvPlanner::plan(model, goals, state, max_steps);
 
     if let Ok(result) = &result {
         if result.plan_found {
             // assert_eq!(result.plan_length, result2.plan_length);
-            println!("plan_result: {} {}", result.plan_length, result.time_to_solve.as_millis());
+            println!(
+                "plan_result: {} {}",
+                result.plan_length,
+                result.time_to_solve.as_millis()
+            );
             println!("we have a plan of length {}", result.plan_length);
             println!("nuxmv time: {}ms", result.time_to_solve.as_millis());
         }
@@ -139,18 +143,13 @@ pub fn plan(
 
     let result = NuXmvPlanner::plan(model, &goals, state, max_steps);
 
-    // for f in &result.trace {
-    //     println!("==========================");
-    //     println!("{}", f.transition);
-    //     println!("==========================");
-    //     println!("{}", f.state);
-
-    // }
-
     if let Ok(result) = &result {
         if result.plan_found {
-            // assert_eq!(result.plan_length, result2.plan_length);
-            println!("plan_result: {} {}", result.plan_length, result.time_to_solve.as_millis());
+            println!(
+                "plan_result: {} {}",
+                result.plan_length,
+                result.time_to_solve.as_millis()
+            );
             println!("we have a plan of length {}", result.plan_length);
             println!("nuxmv time: {}ms", result.time_to_solve.as_millis());
         }

@@ -20,6 +20,9 @@ pub use path::*;
 pub mod variable;
 pub use variable::*;
 
+pub mod named_predicate;
+pub use named_predicate::*;
+
 pub mod transition;
 pub use transition::*;
 
@@ -27,15 +30,6 @@ use serde::{Deserialize, Serialize};
 use std::error;
 use std::fmt;
 use std::fmt::Display;
-
-#[macro_export]
-macro_rules! hashmap {
-    ($( $key: expr => $val: expr ),*) => {{
-         let mut map = ::std::collections::HashMap::new();
-         $( map.insert($key, $val); )*
-         map
-    }}
-}
 
 type SPResult<T> = std::result::Result<T, SPError>;
 

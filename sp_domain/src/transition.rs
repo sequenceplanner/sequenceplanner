@@ -20,17 +20,6 @@ impl Transition {
         }
     }
 
-    pub fn mut_guard(&mut self) -> &mut Predicate {
-        &mut self.guard
-    }
-
-    pub fn guard(&self) -> &Predicate {
-        &self.guard
-    }
-    pub fn actions(&self) -> &[Action] {
-        self.actions.as_slice()
-    }
-
     pub fn upd_state_path(&mut self, state: &SPState) {
         self.guard.upd_state_path(state);
         self.actions
@@ -42,18 +31,14 @@ impl Transition {
     pub fn modifies(&self) -> HashSet<SPPath> {
         let mut r = HashSet::new();
 
-        r.extend(self.actions().iter().map(|a| a.var.clone()));
+        r.extend(self.actions.iter().map(|a| a.var.clone()));
         r
-    }
-
-    pub fn path(&self) -> &SPPath {
-        &self.path
     }
 }
 
 impl fmt::Display for Transition {
     fn fmt(&self, fmtr: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let s = format!("{}: {}/{:?}", self.path(), self.guard, self.actions);
+        let s = format!("{}: {}/{:?}", self.path, self.guard, self.actions);
         write!(fmtr, "{s}")
     }
 }
