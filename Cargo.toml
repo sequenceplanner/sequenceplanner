@@ -1,6 +1,7 @@
 [workspace]
 members = [
     "sp_domain",
+    "sp_model_derive",
     "sp_model",
     "sp_formal",
 ]

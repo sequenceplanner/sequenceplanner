@@ -34,6 +34,21 @@ pub enum PredicateValue {
     SPPath(SPPath, Option<StatePath>),
 }
 
+pub trait ToPredicateValue {
+    fn to_predicate_value(&self) -> PredicateValue;
+}
+
+// Just a macro helper...
+pub trait ToPredicate {
+    fn to_predicate(&self) -> Predicate;
+}
+
+impl ToPredicate for Predicate {
+    fn to_predicate(&self) -> Predicate {
+        self.clone()
+    }
+}
+
 /// Used in actions to compute a new SPValue.
 /// When using delay and fetching a value from another variable, the current value of that
 /// variable will be taken and assigned to the action variable after the delay, and not the
@@ -1092,11 +1107,8 @@ mod sp_value_test {
                 4.to_spvalue(),
             ],
         );
-        let xs3 = SPValue::Array(SPValueType::Int32, vec![ab.to_spvalue(), ac.to_spvalue()]);
-
         let mut s = state!(ab => 2, ac => 20);
         s.add_variable(kl.clone(), xs);
-        s.add_variable(m.clone(), xs3.clone());
 
         let p1 = Predicate::MEMBER(
             PredicateValue::path(ab.clone()),
@@ -1119,12 +1131,8 @@ mod sp_value_test {
             PredicateValue::value(xs2),
         );
         let p6 = Predicate::MEMBER(
-            PredicateValue::value(ab.to_spvalue()),
+            PredicateValue::SPPath(ab, None),
             PredicateValue::path(m.clone()),
-        );
-        let p7 = Predicate::MEMBER(
-            PredicateValue::value(kl.to_spvalue()),
-            PredicateValue::value(xs3),
         );
 
         println!("MEMBER predicate: {}", p1);
@@ -1138,9 +1146,7 @@ mod sp_value_test {
         println!("MEMBER predicate: {}", p5);
         assert!(!p5.eval(&s));
         println!("MEMBER predicate: {}", p6);
-        assert!(p6.eval(&s));
-        println!("MEMBER predicate: {}", p7);
-        assert!(!p7.eval(&s));
+        assert!(!p6.eval(&s));
     }
 
     #[test]

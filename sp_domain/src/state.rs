@@ -376,6 +376,15 @@ impl SPState {
         }
     }
 
+    /// Use variables own intial valuation to construct a state.
+    pub fn new_from_variables(vars: &[Variable]) -> SPState {
+        let values: Vec<_> = vars
+            .iter()
+            .map(|v| (v.path.clone(), v.initial_state.clone()))
+            .collect();
+        SPState::new_from_values(&values)
+    }
+
     pub fn add_state_variable(&mut self, path: SPPath, value: StateValue) {
         if let std::collections::hash_map::Entry::Vacant(e) = self.index.entry(path.clone()) {
             self.values.push(value);

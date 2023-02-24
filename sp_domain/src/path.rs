@@ -1,6 +1,6 @@
 //! The SPPath is used for identifying items in a model
 
-use super::{SPError, SPResult};
+use super::*;
 use serde::{Deserialize, Serialize};
 
 /// The SPPath is used for identifying all objects in a model. The path will be defined
@@ -10,9 +10,31 @@ pub struct SPPath {
     pub path: Vec<String>,
 }
 
+pub trait HasPath {
+    fn get_path(&self) -> &SPPath;
+}
+
 impl std::fmt::Display for SPPath {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "/{}", self.path.join("/"))
+    }
+}
+
+impl HasPath for SPPath {
+    fn get_path(&self) -> &SPPath {
+        &self
+    }
+}
+
+impl ToPredicateValue for SPPath {
+    fn to_predicate_value(&self) -> PredicateValue {
+        PredicateValue::SPPath(self.clone(), None)
+    }
+}
+
+impl ToPredicate for SPPath {
+    fn to_predicate(&self) -> Predicate {
+        Predicate::EQ(self.to_predicate_value(), true.to_predicate_value())
     }
 }
 

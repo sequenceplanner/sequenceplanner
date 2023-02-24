@@ -1,5 +1,6 @@
 //! Variables in SP are represented by SPValue.
 //!
+use super::*;
 use serde::{Deserialize, Serialize};
 use std::fmt;
 
@@ -14,6 +15,12 @@ pub enum SPValue {
     Path(super::SPPath),
     Array(SPValueType, Vec<SPValue>),
     Unknown,
+}
+
+impl ToPredicateValue for SPValue {
+    fn to_predicate_value(&self) -> PredicateValue {
+        PredicateValue::SPValue(self.clone())
+    }
 }
 
 /// Used by Variables for defining type. Must be the same as SPValue
@@ -194,6 +201,15 @@ impl ToSPValue for bool {
     }
 }
 
+impl<T> ToPredicateValue for T
+where
+    T: ToSPValue,
+{
+    fn to_predicate_value(&self) -> PredicateValue {
+        PredicateValue::SPValue(self.to_spvalue())
+    }
+}
+
 impl ToSPValue for f32 {
     fn to_spvalue(&self) -> SPValue {
         SPValue::Float32(*self)
@@ -220,11 +236,11 @@ impl ToSPValue for &str {
         SPValue::String((*self).to_string())
     }
 }
-impl ToSPValue for super::SPPath {
-    fn to_spvalue(&self) -> SPValue {
-        SPValue::Path(self.clone())
-    }
-}
+// impl ToSPValue for super::SPPath {
+//     fn to_spvalue(&self) -> SPValue {
+//         SPValue::Path(self.clone())
+//     }
+// }
 impl ToSPValue for std::time::SystemTime {
     fn to_spvalue(&self) -> SPValue {
         SPValue::Time(*self)
