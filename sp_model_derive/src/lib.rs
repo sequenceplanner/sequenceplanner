@@ -80,19 +80,17 @@ pub fn derive_resource(input: TokenStream) -> TokenStream {
             let var_type = var_type.unwrap();
 
             let domain = if let Some(domain) = &domain {
-                let vec_str = if is_string {
-                    domain
-                        .split(' ')
-                        .map(|s| format!("\"{s}\".to_spvalue()"))
-                        .collect::<Vec<String>>()
-                        .join(",")
-                } else {
-                    domain
-                        .split(' ')
-                        .map(|s| format!("{s}.to_spvalue()"))
-                        .collect::<Vec<String>>()
-                        .join(",")
-                };
+                let vec_str = domain
+                    .split(' ')
+                    .map(|s| {
+                        if is_string {
+                            format!("\"{s}\".to_spvalue()")
+                        } else {
+                            format!("{s}.to_spvalue()")
+                        }
+                    })
+                    .collect::<Vec<String>>()
+                    .join(",");
                 let v = format!("vec! [ {vec_str} ]");
                 use std::str::FromStr;
                 TokenStream2::from_str(&v).unwrap()
@@ -153,7 +151,6 @@ pub fn derive_resource(input: TokenStream) -> TokenStream {
                 Self {
                     #( #make_fields , )*
                     #( #make_nested , )*
-
                 }
             }
 
