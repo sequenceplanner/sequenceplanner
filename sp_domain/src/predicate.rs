@@ -1379,4 +1379,44 @@ mod sp_value_test {
             )
         );
     }
+
+    #[test]
+    fn test_new_predicate_macros() {
+        struct Test {
+            path: SPPath,
+            variable: Variable,
+        }
+        let r = Test {
+            path: SPPath::from_string("r.path"),
+            variable: Variable::new_boolean("r.var"),
+        };
+        let p = SPPath::from_string("p.path");
+
+        impl Test {
+            fn fun_p() -> SPPath {
+                return SPPath::from_string("path_from_fun");
+            }
+            fn fun_v() -> Variable {
+                return Variable::new_boolean("r.var");
+            }
+        }
+
+        // let x = px!((r.path != true) && (r.path != true) && ((r.path != true) && (r.path != true)));
+        // let x = px!(r.path != true);
+        let x = px!(r.path == r.variable);
+        println!("{x:?}\n");
+        let x = px!([Test::fun_v()] == r.path);
+        println!("{x:?}\n");
+        let x = px!([[r.variable] == r.path] && [x]);
+        println!("{x:?}\n");
+        let x = px!([r.variable == ["hello"]] && [p == p]);
+        println!("{x:?}\n");
+        let x = px!([[r.variable] == [Test::fun_v()]] && [x]);
+        println!("{x:?}\n");
+        let x = px!(r.variable);
+        println!("{x:?}\n");
+        let y = px!([r.variable == [Test::fun_p()]] && [r.variable]);
+        let x = px!([y] => [y]);
+        println!("{x:?}\n");
+    }
 }
