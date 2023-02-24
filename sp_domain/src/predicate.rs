@@ -608,6 +608,93 @@ impl EvaluatePredicate for Action {
     }
 }
 
+
+#[macro_export]
+macro_rules! px {
+    // parens
+    (($($inner:tt)+) ) => {{
+        // println!("matched parens: {}", stringify!($($inner)+));
+        px! ( $($inner)+ )
+    }};
+    ([$($inner:tt)+] ) => {{
+        // println!("matched square parens: {}", stringify!($($inner)+));
+        px! ( $($inner)+ )
+    }};
+
+    // AND: the brackets are needed because "tt" includes && which
+    // leads to ambiguity without an additional delimeter
+    ([$($first:tt)+] $(&& [$($rest:tt)+])+) => {{
+        // println!("matched &&: {}", stringify!($($first)+));
+        let first = px! ( $($first)+ );
+        let mut v = vec![first];
+        $(
+            // println!(" && ...: {}", stringify!($($rest)+));
+            let r = px!($($rest)+);
+            v.push(r);
+        )*
+        Predicate::AND(v)
+    }};
+
+    // OR: same as and.
+    ([$($first:tt)+] $(|| [$($rest:tt)+])+) => {{
+        // println!("matched ||: {}", stringify!($($first)+));
+        let first = px! ( $($first)+ );
+        let mut v = vec![first];
+        $(
+            let r = px!($($rest)+);
+            v.push(r);
+        )*
+        Predicate::OR(v)
+    }};
+
+    // implication
+    ([$($x:tt)+] => [$($y:tt)+]) => {{
+        // println!("matched implication: {} => {}", stringify!($($x)+), stringify!($($y)+));
+        let x = px! ( $($x)+ );
+        let y = px! ( $($y)+ );
+        Predicate::OR(vec![Predicate::NOT(Box::new(x)), y])
+    }};
+
+
+    ([ $lhs:expr ] == [ $rhs:expr ]) => {{
+        // println!("matched [{}] == [{}]", stringify!($lhs), stringify!($rhs));
+        Predicate::EQ(
+            $lhs .to_predicate_value(),
+            $rhs .to_predicate_value(),
+        )
+    }};
+
+    ([ $lhs:expr ] == $($rhs:tt).+) => {{
+        // println!("matched [{}] == {}", stringify!($lhs), stringify!($($rhs).+));
+        Predicate::EQ(
+            $lhs .to_predicate_value(),
+            $($rhs).+ .to_predicate_value(),
+        )
+    }};
+
+    ($($lhs:tt).+ == [ $rhs:expr ]) => {{
+        // println!("matched {} == [{}]", stringify!($($lhs).+), stringify!($rhs));
+        Predicate::EQ(
+            $($lhs).+ .to_predicate_value(),
+            $rhs .to_predicate_value(),
+        )
+    }};
+
+    ($($lhs:tt).+ == $($rhs:tt).+) => {{
+        // println!("matched {} == {}", stringify!($($lhs).+), stringify!($($rhs).+));
+        Predicate::EQ(
+            $($lhs).+ .to_predicate_value(),
+            $($rhs).+ .to_predicate_value(),
+        )
+    }};
+
+    ($i:expr) => {{
+        $i.to_predicate()
+    }};
+
+}
+
+
 #[macro_export]
 macro_rules! p {
     // parens
