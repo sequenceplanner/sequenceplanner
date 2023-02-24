@@ -76,9 +76,9 @@ mod test_items {
         let b = a!(p:ab <- p:kl);
         let c = a!(p:xy ? p);
 
-        let mut t1 = Transition::new("t1", p!(p: ac), vec![a]);
-        let mut t2 = Transition::new("t2", p!(!p: ac), vec![b]);
-        let mut t3 = Transition::new("t3", Predicate::TRUE, vec![c]);
+        let t1 = Transition::new("t1", p!(p: ac), vec![a]);
+        let t2 = Transition::new("t2", p!(!p: ac), vec![b]);
+        let t3 = Transition::new("t3", Predicate::TRUE, vec![c]);
 
         let res = t1.eval(&s);
         println!("t1.eval: {:?}", res);

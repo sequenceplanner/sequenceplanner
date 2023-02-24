@@ -211,7 +211,7 @@ impl SPStateJson {
                     let mut map = serde_json::Map::new();
                     map.insert("0".to_string(), x);
                     insert(&mut map, &p.drop_root(), v);
-                    let mut ch = xs
+                    let ch = xs
                         .entry(&root)
                         .or_insert(serde_json::Value::Object(serde_json::Map::new()));
                     *ch = serde_json::Value::Object(map);
@@ -682,7 +682,7 @@ impl SPState {
     /// Given a list of paths, consume this state and return a new
     /// state that only contain the exact paths given.
     pub fn filter_by_paths(self, paths: &[SPPath]) -> SPState {
-        let mut kv = self.extract();
+        let kv = self.extract();
         let filtered = kv
             .into_iter()
             .filter(|(k, _)| paths.iter().any(|p| k == p))
@@ -733,6 +733,7 @@ impl<'a> fmt::Display for StateProjection<'a> {
 macro_rules! state {
 
     ($( $key: ident => $val: expr ),*) => {{
+        #[allow(unused_mut)]
         let mut s: Vec<(SPPath, StateValue)> = Vec::new();
         $(
             s.push(($key.clone(), StateValue::new($val.to_spvalue())));
@@ -833,7 +834,7 @@ mod sp_value_test {
 
     #[test]
     fn test_difference() {
-        let mut s = state!(["a", "b"] => 2, ["a", "c"] => true, ["k", "l"] => true);
+        let s = state!(["a", "b"] => 2, ["a", "c"] => true, ["k", "l"] => true);
         let ab = s.state_path(&SPPath::from_slice(&["a", "b"])).unwrap();
         let ac = s.state_path(&SPPath::from_slice(&["a", "c"])).unwrap();
 

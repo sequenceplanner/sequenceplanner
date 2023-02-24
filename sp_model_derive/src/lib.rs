@@ -21,15 +21,8 @@ pub fn derive_resource(input: TokenStream) -> TokenStream {
     let field_vars: Vec<(syn::Ident, TokenStream2)> = fields
         .iter()
         .flat_map(|field| {
-            if field.ident.is_none() {
-                return None;
-            }
-            let field_ident: Ident = field.ident.clone().unwrap();
-            let attr = single_value(field.attrs.iter());
-            if attr.is_none() {
-                return None;
-            }
-            let attr = attr.unwrap();
+            let field_ident: Ident = field.ident.clone()?;
+            let attr = single_value(field.attrs.iter())?;
             if !attr.path.is_ident("Variable") {
                 return None;
             }
@@ -43,62 +36,59 @@ pub fn derive_resource(input: TokenStream) -> TokenStream {
             let mut is_string = false;
 
             // TODO: clean up, remove panics.
-            match name_values {
-                Ok(name_value) => {
-                    for nv in name_value {
-                        if nv.path.get_ident().map(|i| i.to_string()) == Some("type".into()) {
-                            let value = match &nv.lit {
-                                syn::Lit::Str(v) => v.value(),
-                                _ => "expeced a string value".into(), // handle this err and don't panic
-                            };
+            if let Ok(name_value) = name_values {
+                for nv in name_value {
+                    if nv.path.get_ident().map(|i| i.to_string()) == Some("type".into()) {
+                        let value = match &nv.lit {
+                            syn::Lit::Str(v) => v.value(),
+                            _ => "expeced a string value".into(), // handle this err and don't panic
+                        };
 
-                            var_type = match value.to_ascii_lowercase().as_str() {
-                                "string" => {
-                                    is_string = true;
-                                    Some(quote!(SPValueType::String))
-                                }
-                                "bool" => Some(quote!(SPValueType::Bool)),
-                                "int" => Some(quote!(SPValueType::Int32)),
-                                "float" => Some(quote!(SPValueType::Float32)),
-                                _ => panic!("must have a type"),
-                            };
-                        }
+                        var_type = match value.to_ascii_lowercase().as_str() {
+                            "string" => {
+                                is_string = true;
+                                Some(quote!(SPValueType::String))
+                            }
+                            "bool" => Some(quote!(SPValueType::Bool)),
+                            "int" => Some(quote!(SPValueType::Int32)),
+                            "float" => Some(quote!(SPValueType::Float32)),
+                            _ => panic!("must have a type"),
+                        };
+                    }
 
-                        if nv.path.get_ident().map(|i| i.to_string()) == Some("initial".into()) {
-                            let value = match &nv.lit {
-                                syn::Lit::Str(_) => &nv.lit,
-                                syn::Lit::Bool(_) => &nv.lit,
-                                syn::Lit::Int(_) => &nv.lit,
-                                syn::Lit::Float(_) => &nv.lit,
-                                _ => panic!("expeced a string value"),
-                            };
-                            initial = Some(quote!(#value . to_spvalue()));
-                        }
+                    if nv.path.get_ident().map(|i| i.to_string()) == Some("initial".into()) {
+                        let value = match &nv.lit {
+                            syn::Lit::Str(_) => &nv.lit,
+                            syn::Lit::Bool(_) => &nv.lit,
+                            syn::Lit::Int(_) => &nv.lit,
+                            syn::Lit::Float(_) => &nv.lit,
+                            _ => panic!("expeced a string value"),
+                        };
+                        initial = Some(quote!(#value . to_spvalue()));
+                    }
 
-                        if nv.path.get_ident().map(|i| i.to_string()) == Some("domain".into()) {
-                            let value = match &nv.lit {
-                                syn::Lit::Str(v) => v.value(),
-                                _ => "expeced a string value".into(),
-                            };
-                            domain = Some(value);
-                        }
+                    if nv.path.get_ident().map(|i| i.to_string()) == Some("domain".into()) {
+                        let value = match &nv.lit {
+                            syn::Lit::Str(v) => v.value(),
+                            _ => "expeced a string value".into(),
+                        };
+                        domain = Some(value);
                     }
                 }
-                Err(_) => {}
-            };
+            }
 
             let var_type = var_type.unwrap();
 
             let domain = if let Some(domain) = &domain {
                 let vec_str = if is_string {
                     domain
-                        .split(" ")
+                        .split(' ')
                         .map(|s| format!("\"{s}\".to_spvalue()"))
                         .collect::<Vec<String>>()
                         .join(",")
                 } else {
                     domain
-                        .split(" ")
+                        .split(' ')
                         .map(|s| format!("{s}.to_spvalue()"))
                         .collect::<Vec<String>>()
                         .join(",")
@@ -117,7 +107,6 @@ pub fn derive_resource(input: TokenStream) -> TokenStream {
                     v.initial_state = #val;
                     v
                 })
-                .into()
             } else {
                 quote!(Variable::new(& #name, #var_type, #domain))
             };
@@ -128,22 +117,15 @@ pub fn derive_resource(input: TokenStream) -> TokenStream {
     let nested: Vec<(Ident, TokenStream2)> = fields
         .iter()
         .flat_map(|field| {
-            if field.ident.is_none() {
-                return None;
-            }
-            let field_ident = field.ident.clone().unwrap();
-            let attr = single_value(field.attrs.iter());
-            if attr.is_none() {
-                return None;
-            }
-            let attr = attr.unwrap();
+            let field_ident: Ident = field.ident.clone()?;
+            let attr = single_value(field.attrs.iter())?;
             if !attr.path.is_ident("Resource") {
                 return None;
             }
 
             let ty = &field.ty;
             let name = quote!(&format!("{}/{}", name, stringify!(#field_ident)));
-            Some((field_ident, quote!(#ty :: new(#name)).into()))
+            Some((field_ident, quote!(#ty :: new(#name))))
         })
         .collect();
 

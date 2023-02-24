@@ -396,7 +396,7 @@ impl Action {
             Compute::PredicateValue(PredicateValue::SPValue(v)) => v.to_string(),
             Compute::PredicateValue(PredicateValue::SPPath(p, _)) => p.to_string(),
             Compute::Predicate(p) => p.to_string(),
-            Compute::Function(xs) => xs.iter().fold(String::default(), |mut acc, (p, v)| {
+            Compute::Function(xs) => xs.iter().fold(String::default(), |acc, (p, v)| {
                 format!("{acc}[if {p} then {v}]")
             }),
             Compute::Any => "?".to_string(),
@@ -937,11 +937,11 @@ mod sp_value_test {
     fn eval_pred() {
         let s = state!(["a", "b"] => 2, ["a", "c"] => true, ["k", "l"] => true);
         let v = SPPath::from_slice(&["a", "b"]);
-        let mut eq = Predicate::EQ(
+        let eq = Predicate::EQ(
             PredicateValue::SPValue(2.to_spvalue()),
             PredicateValue::SPPath(v.clone(), None),
         );
-        let mut eq2 = Predicate::EQ(
+        let eq2 = Predicate::EQ(
             PredicateValue::SPValue(3.to_spvalue()),
             PredicateValue::SPPath(v.clone(), None),
         );
@@ -955,15 +955,15 @@ mod sp_value_test {
         let ac = SPPath::from_slice(&["a", "c"]);
         let kl = SPPath::from_slice(&["k", "l"]);
 
-        let mut eq = Predicate::EQ(
+        let eq = Predicate::EQ(
             PredicateValue::SPValue(2.to_spvalue()),
             PredicateValue::SPPath(ac.clone(), None),
         );
-        let mut eq2 = Predicate::NEQ(
+        let eq2 = Predicate::NEQ(
             PredicateValue::SPValue(3.to_spvalue()),
             PredicateValue::SPPath(kl.clone(), None),
         );
-        let mut eq3 = Predicate::EQ(
+        let eq3 = Predicate::EQ(
             PredicateValue::SPValue(3.to_spvalue()),
             PredicateValue::SPPath(ab.clone(), None),
         );
@@ -984,15 +984,15 @@ mod sp_value_test {
         let mut s = state!(ab => 2, ac => true, kl => true, xy => false);
         let p = p!([p: ac] && [p: kl]);
 
-        let mut a = Action::new(
+        let a = Action::new(
             ac.clone(),
             Compute::PredicateValue(PredicateValue::default()),
         );
-        let mut a2 = Action::new(
+        let a2 = Action::new(
             ab.clone(),
             Compute::PredicateValue(PredicateValue::SPPath(kl, None)),
         );
-        let mut a3 = Action::new(xy.clone(), Compute::Predicate(p));
+        let a3 = Action::new(xy.clone(), Compute::Predicate(p));
 
         a3.next(&mut s).unwrap();
         // let next = StateValue::Next(states::Next {
@@ -1035,12 +1035,12 @@ mod sp_value_test {
         let kl = SPPath::from_slice(&["k", "l"]);
         let mut s = state!(ab => 2, ac => true, kl => true);
 
-        let mut a = Action {
+        let a = Action {
             var: ac.clone(),
             value: Compute::PredicateValue(PredicateValue::default()),
             state_path: None,
         };
-        let mut a2 = Action {
+        let a2 = Action {
             var: ab.clone(),
             value: Compute::PredicateValue(PredicateValue::SPPath(kl, None)),
             state_path: None,
@@ -1059,7 +1059,7 @@ mod sp_value_test {
         let kl = SPPath::from_slice(&["k", "l"]);
         let now = std::time::SystemTime::now();
 
-        let mut s = state!(ab => 2, ac => true, kl => now);
+        let s = state!(ab => 2, ac => true, kl => now);
 
         let p1 = Predicate::TON(
             PredicateValue::path(kl.clone()),

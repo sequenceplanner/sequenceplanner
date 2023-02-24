@@ -1,8 +1,5 @@
 //! The SP domain
 
-#![allow(unused_mut)] // for some reason I get not a correct warning for mut in macros
-#![allow(clippy::option_map_unit_fn)]
-
 pub mod value;
 pub use value::*;
 

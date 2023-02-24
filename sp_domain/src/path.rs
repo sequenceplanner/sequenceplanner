@@ -22,7 +22,7 @@ impl std::fmt::Display for SPPath {
 
 impl HasPath for SPPath {
     fn get_path(&self) -> &SPPath {
-        &self
+        self
     }
 }
 
