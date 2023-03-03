@@ -7,8 +7,11 @@ use serde::ser::SerializeMap;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 use std::collections::HashMap;
+use rustc_hash::FxHashMap;
 use std::fmt;
 use uuid::Uuid;
+
+pub type SPState2 = FxHashMap<String, SPValue>;
 
 /// Representing a State in SP with variables and their values. The values are
 /// stored in a vec to speed up reading and writing. The position of a value in the
@@ -714,6 +717,7 @@ impl fmt::Display for SPState {
     }
 }
 
+
 impl<'a> fmt::Display for StateProjection<'a> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         // Sort keys by name.
@@ -727,6 +731,7 @@ impl<'a> fmt::Display for StateProjection<'a> {
         write!(f, "\n{}", buf.join("\n"))
     }
 }
+
 
 /// helping making states with a macro
 #[macro_export]
@@ -749,6 +754,7 @@ macro_rules! state {
         SPState::new_from_state_values(&s)
     }}
 }
+
 
 /// ********** TESTS ***************
 

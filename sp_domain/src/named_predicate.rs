@@ -9,8 +9,10 @@ pub struct NamedPredicate {
 }
 
 impl NamedPredicate {
-    pub fn new(name: &str, predicate: Predicate) -> Self {
-        let path = SPPath::from_string(name);
-        Self { path, predicate }
+    pub fn new(path: SPPath, predicate: Predicate) -> Self {
+        Self {
+            path,
+            predicate,
+        }
     }
 }

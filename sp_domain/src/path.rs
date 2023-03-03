@@ -1,10 +1,8 @@
-//! The SPPath is used for identifying items in a model
+//! The SPPath is used for identifying items in a model.
 
 use super::*;
 use serde::{Deserialize, Serialize};
 
-/// The SPPath is used for identifying all objects in a model. The path will be defined
-/// based on where the item is in the model hierarchy
 #[derive(Hash, Eq, PartialEq, PartialOrd, Ord, Serialize, Deserialize, Clone, Default, Debug)]
 pub struct SPPath {
     pub path: Vec<String>,
@@ -17,6 +15,37 @@ pub trait HasPath {
 impl std::fmt::Display for SPPath {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "/{}", self.path.join("/"))
+    }
+}
+
+impl From<&str> for SPPath {
+    fn from(s: &str) -> Self {
+        let path: Vec<String> = s
+            .trim_start_matches('/')
+            .trim_end_matches('/')
+            .split('/')
+            .map(|x|x.to_string())
+            .collect();
+        Self { path }
+    }
+}
+
+impl From<String> for SPPath {
+    fn from(s: String) -> Self {
+        let path: Vec<String> = s
+            .trim_start_matches('/')
+            .trim_end_matches('/')
+            .split('/')
+            .map(|x|x.to_string())
+            .collect();
+        Self { path }
+    }
+}
+
+impl<T: AsRef<str>> From<&[T]> for SPPath {
+    fn from(s: &[T]) -> Self {
+        let path: Vec<String> = s.iter().map(|s| s.as_ref().to_string()).collect();
+        Self { path }
     }
 }
 
@@ -41,21 +70,6 @@ impl ToPredicate for SPPath {
 impl SPPath {
     pub fn new() -> SPPath {
         SPPath { path: vec![] }
-    }
-    pub fn from(path: Vec<String>) -> SPPath {
-        SPPath { path }
-    }
-    pub fn from_slice<T: AsRef<str>>(path: &[T]) -> SPPath {
-        let xs: Vec<String> = path.iter().map(|s| s.as_ref().to_string()).collect();
-        SPPath { path: xs }
-    }
-    pub fn from_string(s: &str) -> SPPath {
-        let res: Vec<&str> = s
-            .trim_start_matches('/')
-            .trim_end_matches('/')
-            .split('/')
-            .collect();
-        SPPath::from_slice(&res)
     }
     pub fn add_child(&self, sub: &str) -> Self {
         let mut p = self.path.clone();
@@ -174,6 +188,7 @@ impl SPPath {
         }
     }
 }
+
 
 #[cfg(test)]
 mod tests_paths {

@@ -53,8 +53,7 @@ fn make_model() {
     assert!(pred.eval(&state));
 
     // set state by path
-    state.add_variable(SPPath::from_string("/model/resource2/variable_string"),
-                       "hello".to_spvalue());
+    state.add_variable("/model/resource2/variable_string".into(), "hello".to_spvalue());
 
     let pred = px!(model.resource2.variable_string == "hello");
     assert!(pred.eval(&state));

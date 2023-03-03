@@ -1,7 +1,8 @@
+/// This file defines both predicates and actions
+
 use super::*;
 use rand::prelude::*;
 use serde::{Deserialize, Serialize};
-/// In this file both predicates and actions are defined
 use std::collections::HashMap;
 
 #[derive(Debug, PartialEq, Serialize, Deserialize, Clone)]
@@ -82,6 +83,16 @@ impl<'a> PredicateValue {
                 } else {
                     None
                 }
+            }
+        }
+    }
+
+    pub fn sp_value2(&'a self, state: &'a SPState2) -> Option<&'a SPValue> {
+        match self {
+            PredicateValue::SPValue(x) => Some(x),
+            PredicateValue::SPPath(path, _) => {
+                let string = path.path.join(".");
+                state.get(&string)
             }
         }
     }
@@ -432,10 +443,12 @@ impl Default for Compute {
 /// Eval is used to evaluate a predicate (or an operation ).
 pub trait EvaluatePredicate {
     fn eval(&self, state: &SPState) -> bool;
+    fn eval2(&self, state: &SPState2) -> bool;
 }
 
 pub trait NextAction {
     fn next(&self, state: &mut SPState) -> SPResult<()>;
+    fn next2(&self, state: &mut SPState2) -> SPResult<()>;
 }
 
 impl EvaluatePredicate for Predicate {
@@ -544,6 +557,97 @@ impl EvaluatePredicate for Predicate {
               // Predicate::INDOMAIN(value, domain) => {}
         }
     }
+
+    fn eval2(&self, state: &SPState2) -> bool {
+        match self {
+            Predicate::AND(ps) => ps.iter().all(|p| p.eval2(state)),
+            Predicate::OR(ps) => ps.iter().any(|p| p.eval2(state)),
+            Predicate::XOR(ps) => {
+                let mut c = 0;
+                for p in ps.iter() {
+                    if p.eval2(state) {
+                        c += 1;
+                    }
+                }
+                c == 1
+                // ps.iter_mut()
+                //     .filter(|p| p.eval(state))  // for some reason does not filter with &mut
+                //     .count()
+                //     == 1
+            }
+            Predicate::NOT(p) => !p.eval2(state),
+            Predicate::TRUE => true,
+            Predicate::FALSE => false,
+            Predicate::EQ(lp, rp) => {
+                let a = lp.sp_value2(state);
+                let b = rp.sp_value2(state);
+                if let (Some(a), Some(b)) = (a, b) {
+                    a == b
+                } else {
+                    false
+                }
+            }
+            Predicate::NEQ(lp, rp) => {
+                let a = lp.sp_value2(state);
+                let b = rp.sp_value2(state);
+                if let (Some(a), Some(b)) = (a, b) {
+                    a != b
+                } else {
+                    false
+                }
+            }
+            Predicate::TON(lp, rp) => {
+                if let (Some(t), Some(d)) = (lp.sp_value2(state), rp.sp_value2(state)) {
+                    if let SPValue::Time(time) = t {
+                        let current_duration = time.elapsed().unwrap_or_default();
+                        let delay = match d {
+                            SPValue::Float32(x) => *x as i32,
+                            SPValue::Int32(x) => *x,
+                            _ => 0,
+                        };
+                        current_duration.as_millis() > delay.unsigned_abs() as u128
+                    } else {
+                        eprintln!("TON must point to a timestamp, and not: {t:?} i");
+                        false
+                    }
+                } else {
+                    false
+                }
+            }
+            Predicate::TOFF(lp, rp) => {
+                if let (Some(t), Some(d)) = (lp.sp_value2(state), rp.sp_value2(state)) {
+                    if let SPValue::Time(time) = t {
+                        let current_duration = time.elapsed().unwrap_or_default();
+                        let delay = match d {
+                            SPValue::Float32(x) => *x as i32,
+                            SPValue::Int32(x) => *x,
+                            _ => 0,
+                        };
+                        current_duration.as_millis() < delay.unsigned_abs() as u128
+                    } else {
+                        eprintln!("TON must point to a timestamp, and not: {t:?} i");
+                        false
+                    }
+                } else {
+                    false
+                }
+            }
+            Predicate::MEMBER(lp, rp) => {
+                if let (Some(v), Some(xs)) = (lp.sp_value2(state), rp.sp_value2(state)) {
+                    if let SPValue::Array(_, xs) = xs {
+                        xs.contains(v)
+                    } else {
+                        eprintln!("Member must point to an array, and not: {xs:?} i");
+                        false
+                    }
+                } else {
+                    false
+                }
+            } // Predicate::GT(lp, rp) => {}
+              // Predicate::LT(lp, rp) => {}
+              // Predicate::INDOMAIN(value, domain) => {}
+        }
+    }
 }
 
 impl NextAction for Action {
@@ -593,6 +697,52 @@ impl NextAction for Action {
             Ok(())
         }
     }
+
+    fn next2(&self, state: &mut SPState2) -> SPResult<()> {
+        let c = match &self.value {
+            Compute::PredicateValue(pv) => match pv.sp_value2(state).cloned() {
+                Some(x) => Some(x),
+                None => {
+                    eprintln!(
+                        "The action PredicateValue, next did not find a value for variable: {pv:?}"
+                    );
+                    return Err(SPError::No(format!(
+                        "The action PredicateValue, next did not find a value for variable: {pv:?}"
+                    )));
+                }
+            },
+            Compute::Predicate(p) => {
+                let res = p.eval2(state);
+                Some(res.to_spvalue())
+            }
+            Compute::Function(xs) => {
+                let res = xs
+                    .iter()
+                    .find(|(p, _)| p.eval2(state))
+                    .and_then(|(_, v)| v.sp_value2(state));
+                match res {
+                    Some(x) => Some(x.clone()),
+                    None => {
+                        eprintln!("No predicates in the action Function was true: {self:?}");
+                        return Err(SPError::No(format!(
+                            "No predicates in the action Function was true: {self:?}"
+                        )));
+                    }
+                }
+            }
+            Compute::Random(n) => Some(SPValue::Int32(rand::thread_rng().gen_range(0..*n))),
+            Compute::TimeStamp => Some(SPValue::Time(std::time::SystemTime::now())),
+            Compute::Any => None,
+        };
+
+        if let Some(c) = c {
+            let string = self.var.path.join(".");
+            state.insert(string, c);
+            Ok(())
+        } else {
+            Ok(())
+        }
+    }
 }
 
 impl EvaluatePredicate for Action {
@@ -606,8 +756,11 @@ impl EvaluatePredicate for Action {
             None => false, // We do not allow actions to add new state variables. But maybe this should change?
         }
     }
-}
 
+    fn eval2(&self, _state: &SPState2) -> bool {
+        return true;
+    }
+}
 
 #[macro_export]
 macro_rules! px {
@@ -760,7 +913,7 @@ macro_rules! p {
 
     ($path:tt == $value:tt) => {{
         // println!("matched {} == {}", stringify!($path), stringify!($value));
-        let p = SPPath::from_string(&stringify!($path).replace("\"", ""));
+        let p = SPPath::from(&stringify!($path).replace("\"", ""));
         Predicate::EQ(
             PredicateValue::SPPath(p, None),
             PredicateValue::SPValue($value.to_spvalue()),
@@ -770,8 +923,8 @@ macro_rules! p {
     // introduce <-> for equality between variables....
     ($path:tt <-> $other:tt) => {{
         // println!("matched {} == {}", stringify!($path), stringify!($value));
-        let p = SPPath::from_string(&stringify!($path).replace("\"", ""));
-        let other = SPPath::from_string(&stringify!($other).replace("\"", ""));
+        let p = SPPath::from(stringify!($path).replace("\"", ""));
+        let other = SPPath::from(stringify!($other).replace("\"", ""));
         Predicate::EQ(
             PredicateValue::SPPath(p, None),
             PredicateValue::SPPath(other, None),
@@ -787,8 +940,8 @@ macro_rules! p {
     // introduce <!> for inequality between variables....
     ($path:tt <!> $other:tt) => {{
         // println!("matched {} == {}", stringify!($path), stringify!($value));
-        let p = SPPath::from_string(&stringify!($path).replace("\"", ""));
-        let other = SPPath::from_string(&stringify!($other).replace("\"", ""));
+        let p = SPPath::from(stringify!($path).replace("\"", ""));
+        let other = SPPath::from(stringify!($other).replace("\"", ""));
         Predicate::NEQ(
             PredicateValue::SPPath(p, None),
             PredicateValue::SPPath(other, None),
@@ -806,7 +959,7 @@ macro_rules! p {
 
     ($path:tt != $value:tt) => {{
         // println!("matched !=");
-        let p = SPPath::from_string(&stringify!($path).replace("\"", ""));
+        let p = SPPath::from(stringify!($path).replace("\"", ""));
         Predicate::NEQ(
             PredicateValue::SPPath(p, None),
             PredicateValue::SPValue($value.to_spvalue()),
@@ -838,7 +991,7 @@ macro_rules! p {
     // reduced to a single token, assume its a path to a boolean variable
     ($p:tt) => {{
         // println!("matched base: {}", stringify!($p));
-        let p = SPPath::from_string(&stringify!($p).replace("\"", ""));
+        let p = SPPath::from(&stringify!($p).replace("\"", ""));
         Predicate::EQ(
             PredicateValue::SPPath(p, None),
             PredicateValue::SPValue(true.to_spvalue()),
@@ -871,7 +1024,7 @@ macro_rules! a {
         )
     }};
     ($path:tt = $val:expr) => {{
-        let p = SPPath::from_string(&stringify!($path).replace("\"", ""));
+        let p = SPPath::from(stringify!($path).replace("\"", ""));
         Action::new(
             p,
             Compute::PredicateValue(PredicateValue::SPValue($val.to_spvalue())),
@@ -923,7 +1076,7 @@ macro_rules! a {
         )
     }};
     (!$path:tt) => {{
-        let p = SPPath::from_string(&stringify!($path).replace("\"", ""));
+        let p = SPPath::from(stringify!($path).replace("\"", ""));
         Action::new(
             p,
             Compute::PredicateValue(PredicateValue::SPValue(false.to_spvalue())),
@@ -1006,9 +1159,9 @@ mod sp_value_test {
 
     #[test]
     fn macro_pred() {
-        let ab = SPPath::from_slice(&["a", "b"]);
-        let ac = SPPath::from_slice(&["a", "c"]);
-        let kl = SPPath::from_slice(&["k", "l"]);
+        let ab = SPPath::from(&["a", "b"]);
+        let ac = SPPath::from(&["a", "c"]);
+        let kl = SPPath::from(&["k", "l"]);
 
         p!([p: ab] && [p: ac] && [p: kl]);
         p!([!p: ab] && [p: ac] && [p: kl]);
@@ -1038,9 +1191,9 @@ mod sp_value_test {
 
     #[test]
     fn support_pred() {
-        let ab = SPPath::from_slice(&["a", "b"]);
-        let ac = SPPath::from_slice(&["a", "c"]);
-        let kl = SPPath::from_slice(&["k", "l"]);
+        let ab = SPPath::from(&["a", "b"]);
+        let ac = SPPath::from(&["a", "c"]);
+        let kl = SPPath::from(&["k", "l"]);
 
         let eq = Predicate::EQ(
             PredicateValue::SPValue(2.to_spvalue()),
@@ -1317,8 +1470,9 @@ mod sp_value_test {
 
     #[test]
     fn action_test() {
-        let x = SPPath::from_string("x");
-        let y = SPPath::from_string("x/y");
+        let x = SPPath::from("x");
+        let y = SPPath::from("x/y");
+
         let assign_5 = Compute::PredicateValue(PredicateValue::SPValue(5.to_spvalue()));
         let assign_true = Compute::PredicateValue(PredicateValue::SPValue(true.to_spvalue()));
         let assign_false = Compute::PredicateValue(PredicateValue::SPValue(false.to_spvalue()));
@@ -1336,7 +1490,7 @@ mod sp_value_test {
     #[test]
     fn pred_test() {
         let x_true = Predicate::EQ(
-            PredicateValue::SPPath(SPPath::from_string("x"), None),
+            PredicateValue::SPPath(SPPath::from("x"), None),
             PredicateValue::SPValue(true.to_spvalue()),
         );
         let not_x_true = Predicate::NOT(Box::new(x_true.clone()));
@@ -1344,7 +1498,7 @@ mod sp_value_test {
         assert_eq!(p!(!x), not_x_true);
         assert_eq!(p!(!(x)), not_x_true);
 
-        let lp = SPPath::from_string("really/long/path");
+        let lp = SPPath::from("really/long/path");
         let lp_true = Predicate::EQ(
             PredicateValue::SPPath(lp.clone(), None),
             PredicateValue::SPValue(true.to_spvalue()),
@@ -1367,7 +1521,7 @@ mod sp_value_test {
         assert_eq!(
             p!(x == 5),
             Predicate::EQ(
-                PredicateValue::SPPath(SPPath::from_string("x"), None),
+                PredicateValue::SPPath(SPPath::from("x"), None),
                 PredicateValue::SPValue(5.to_spvalue())
             )
         );
@@ -1387,17 +1541,17 @@ mod sp_value_test {
             variable: Variable,
         }
         let r = Test {
-            path: SPPath::from_string("r.path"),
+            path: SPPath::from("r.path"),
             variable: Variable::new_boolean("r.var"),
         };
-        let p = SPPath::from_string("p.path");
+        let p = SPPath::from("p.path");
 
         impl Test {
             fn fun_p() -> SPPath {
-                return SPPath::from_string("path_from_fun");
+                return SPPath::from("path_from_fun");
             }
             fn fun_v() -> Variable {
-                return Variable::new_boolean("r.var");
+                return Variable::new_boolean("r.var".into());
             }
         }
 

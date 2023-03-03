@@ -98,15 +98,15 @@ pub fn derive_resource(input: TokenStream) -> TokenStream {
                 quote!(vec![])
             };
 
-            let name = quote!(format!("{}/{}", name, stringify!(#field_ident)));
+            let name = quote!(format!("{}.{}", name, stringify!(#field_ident)));
             let var = if let Some(val) = initial {
                 quote!({
-                    let mut v = Variable::new(& #name, #var_type, #domain);
+                    let mut v = Variable::new( #name .into(), #var_type, #domain);
                     v.initial_state = #val;
                     v
                 })
             } else {
-                quote!(Variable::new(& #name, #var_type, #domain))
+                quote!(Variable::new( #name .into(), #var_type, #domain))
             };
             Some((field_ident, var))
         })
@@ -122,7 +122,7 @@ pub fn derive_resource(input: TokenStream) -> TokenStream {
             }
 
             let ty = &field.ty;
-            let name = quote!(&format!("{}/{}", name, stringify!(#field_ident)));
+            let name = quote!(&format!("{}.{}", name, stringify!(#field_ident)));
             Some((field_ident, quote!(#ty :: new(#name))))
         })
         .collect();

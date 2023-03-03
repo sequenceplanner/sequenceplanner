@@ -29,8 +29,7 @@ impl ToPredicate for Variable {
 }
 
 impl Variable {
-    pub fn new(name: &str, value_type: SPValueType, domain: Vec<SPValue>) -> Self {
-        let path = SPPath::from_string(name);
+    pub fn new(path: SPPath, value_type: SPValueType, domain: Vec<SPValue>) -> Self {
         Self {
             path,
             value_type,
@@ -39,8 +38,7 @@ impl Variable {
         }
     }
 
-    pub fn new_boolean(name: &str) -> Self {
-        let path = SPPath::from_string(name);
+    pub fn new_boolean(path: SPPath) -> Self {
         Self {
             path,
             value_type: SPValueType::Bool,
