@@ -59,7 +59,7 @@ where
             // While there are entries remaining in the input, add them
             // into our map.
             while let Some((key, value)) = access.next_entry::<String, usize>()? {
-                let sppath = SPPath::from_string(&key);
+                let sppath = SPPath::from(key);
                 map.insert(sppath, value);
             }
 
@@ -143,7 +143,7 @@ impl SPStateJson {
             obj.iter()
                 .flat_map(|(k, v)| {
                     let mut p = if k != &"0".to_string() {
-                        SPPath::from_string(k)
+                        SPPath::from(k.clone())
                     } else {
                         SPPath::new()
                     };
@@ -195,7 +195,7 @@ impl SPStateJson {
                 }
                 Some(serde_json::Value::Object(_)) => {
                     let elm_path = if p.path.len() == 1 {
-                        SPPath::from_string("0")
+                        SPPath::from("0")
                     } else {
                         p.drop_root()
                     };
@@ -684,8 +684,8 @@ impl SPState {
 
     /// Given a list of paths, consume this state and return a new
     /// state that only contain the exact paths given.
-    pub fn filter_by_paths(self, paths: &[SPPath]) -> SPState {
-        let kv = self.extract();
+    pub fn filter_by_paths(&self, paths: &[SPPath]) -> SPState {
+        let kv = self.clone().extract();
         let filtered = kv
             .into_iter()
             .filter(|(k, _)| paths.iter().any(|p| k == p))
@@ -763,9 +763,9 @@ mod sp_value_test {
     use super::*;
     #[test]
     fn create_state() {
-        let ab = SPPath::from_slice(&["a", "b"]);
-        let ac = SPPath::from_slice(&["a", "c"]);
-        let kl = SPPath::from_slice(&["k", "l"]);
+        let ab = SPPath::from(&["a", "b"]);
+        let ac = SPPath::from(&["a", "c"]);
+        let kl = SPPath::from(&["k", "l"]);
         let mut s = state!(["a", "b"] => 2, ["a", "c"] => true, ["k", "l"] => true);
         let s2 = state!(ab => 2, ac => true, kl => true);
         println!("s proj {:?}", s.projection());
@@ -774,10 +774,10 @@ mod sp_value_test {
         assert_eq!(s, s2);
 
         s.add_variable(
-            SPPath::from_string("timer/test"),
+            SPPath::from("timer/test"),
             SPValue::Time(std::time::SystemTime::now()),
         );
-        s.add_variable(SPPath::from_string("path/test"), SPValue::Path(ac.clone()));
+        s.add_variable(SPPath::from("path/test"), SPValue::Path(ac.clone()));
 
         let x = SPStateJson::from_state_recursive(&s).to_json();
         println!("{}", x);
@@ -787,7 +787,7 @@ mod sp_value_test {
     fn get_value() {
         let s = state!(["a", "b"] => 2, ["a", "c"] => true, ["k", "l"] => true);
 
-        let v = SPPath::from_slice(&["a", "b"]);
+        let v = SPPath::from(&["a", "b"]);
         let res = s.sp_value_from_path(&v);
 
         assert_eq!(res, Some(&2.to_spvalue()));
@@ -796,7 +796,7 @@ mod sp_value_test {
     #[test]
     fn next() {
         let mut s = state!(["a", "b"] => 2, ["a", "c"] => true, ["k", "l"] => true);
-        let v = &SPPath::from_slice(&["a", "b"]);
+        let v = &SPPath::from(&["a", "b"]);
         let state_path = s.state_path(v).unwrap();
         let x = s.next(&state_path, 5.to_spvalue());
         assert_eq!(Ok(()), x);
@@ -810,12 +810,12 @@ mod sp_value_test {
 
     #[test]
     fn sub_state_testing() {
-        let a = SPPath::from_slice(&["a"]);
-        let ab = SPPath::from_slice(&["a", "b"]);
-        let ax = SPPath::from_slice(&["a", "x"]);
-        let abc = SPPath::from_slice(&["a", "b", "c"]);
-        let abx = SPPath::from_slice(&["a", "b", "x"]);
-        let b = SPPath::from_slice(&["b"]);
+        let a = SPPath::from(&["a"]);
+        let ab = SPPath::from(&["a", "b"]);
+        let ax = SPPath::from(&["a", "x"]);
+        let abc = SPPath::from(&["a", "b", "c"]);
+        let abx = SPPath::from(&["a", "b", "x"]);
+        let b = SPPath::from(&["b"]);
         let s = state!(abc => false, abx => false, ax => true);
 
         // sub_state_projection
@@ -841,8 +841,8 @@ mod sp_value_test {
     #[test]
     fn test_difference() {
         let s = state!(["a", "b"] => 2, ["a", "c"] => true, ["k", "l"] => true);
-        let ab = s.state_path(&SPPath::from_slice(&["a", "b"])).unwrap();
-        let ac = s.state_path(&SPPath::from_slice(&["a", "c"])).unwrap();
+        let ab = s.state_path(&SPPath::from(&["a", "b"])).unwrap();
+        let ac = s.state_path(&SPPath::from(&["a", "c"])).unwrap();
 
         let mut new_s = s.clone();
         new_s.force(&ab, &3.to_spvalue()).unwrap();
@@ -866,17 +866,17 @@ mod sp_value_test {
 
     #[test]
     fn state_json() {
-        let ab = SPPath::from_slice(&["a", "b"]);
-        let abc = SPPath::from_slice(&["a", "b", "c"]);
-        let ac = SPPath::from_slice(&["a", "c"]);
-        let kl = SPPath::from_slice(&["k", "l"]);
+        let ab = SPPath::from(&["a", "b"]);
+        let abc = SPPath::from(&["a", "b", "c"]);
+        let ac = SPPath::from(&["a", "c"]);
+        let kl = SPPath::from(&["k", "l"]);
         let mut s = state!(ab => 2, ac => true, kl => true, abc => false);
         s.add_variable(
-            SPPath::from_string("timer/test"),
+            SPPath::from("timer/test"),
             SPValue::Time(std::time::SystemTime::now()),
         );
         s.add_variable(
-            SPPath::from_string("a/b/c/d/e"),
+            SPPath::from("a/b/c/d/e"),
             SPValue::Time(std::time::SystemTime::now()),
         );
 

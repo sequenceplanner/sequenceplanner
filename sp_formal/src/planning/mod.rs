@@ -48,8 +48,8 @@ pub fn plan_with_cache(
 ) -> Result<PlanningResult, String> {
     let now = std::time::Instant::now();
     // filter the state based on the ts model and serialize it to make it hashable
-    let paths: Vec<_> = model.vars.iter().map(|v| &v.path).collect();
-    let filtered_state = state.filter_keys(&paths);
+    let paths: Vec<_> = model.vars.iter().map(|v| v.path.clone()).collect();
+    let filtered_state = state.filter_by_paths(&paths);
     let state_str = filtered_state.to_string();
 
     // serialize goals

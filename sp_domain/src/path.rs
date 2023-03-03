@@ -3,27 +3,25 @@
 use super::*;
 use serde::{Deserialize, Serialize};
 
+const PATH_SEP: &str = ".";
+
 #[derive(Hash, Eq, PartialEq, PartialOrd, Ord, Serialize, Deserialize, Clone, Default, Debug)]
 pub struct SPPath {
     pub path: Vec<String>,
 }
 
-pub trait HasPath {
-    fn get_path(&self) -> &SPPath;
-}
-
 impl std::fmt::Display for SPPath {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "/{}", self.path.join("/"))
+        write!(f, "{}", self.path.join(PATH_SEP))
     }
 }
 
 impl From<&str> for SPPath {
     fn from(s: &str) -> Self {
         let path: Vec<String> = s
-            .trim_start_matches('/')
-            .trim_end_matches('/')
-            .split('/')
+            .trim_start_matches(PATH_SEP)
+            .trim_end_matches(PATH_SEP)
+            .split(PATH_SEP)
             .map(|x|x.to_string())
             .collect();
         Self { path }
@@ -33,11 +31,18 @@ impl From<&str> for SPPath {
 impl From<String> for SPPath {
     fn from(s: String) -> Self {
         let path: Vec<String> = s
-            .trim_start_matches('/')
-            .trim_end_matches('/')
-            .split('/')
+            .trim_start_matches(PATH_SEP)
+            .trim_end_matches(PATH_SEP)
+            .split(PATH_SEP)
             .map(|x|x.to_string())
             .collect();
+        Self { path }
+    }
+}
+
+impl<T: Sized + AsRef<str>, const N: usize> From<&[T; N]> for SPPath {
+    fn from(s: &[T; N]) -> Self {
+        let path: Vec<String> = s.iter().map(|s| s.as_ref().to_string()).collect();
         Self { path }
     }
 }
@@ -49,9 +54,15 @@ impl<T: AsRef<str>> From<&[T]> for SPPath {
     }
 }
 
-impl HasPath for SPPath {
-    fn get_path(&self) -> &SPPath {
-        self
+impl From<Vec<String>> for SPPath {
+    fn from(path: Vec<String>) -> Self {
+        Self { path }
+    }
+}
+
+impl From<&Variable> for SPPath {
+    fn from(v: &Variable) -> Self {
+        v.path.clone()
     }
 }
 
@@ -141,7 +152,7 @@ impl SPPath {
         if self.path.len() <= 1 {
             SPPath::new()
         } else {
-            SPPath::from_slice(&self.path[..self.path.len() - 1])
+            SPPath::from(&self.path[..self.path.len() - 1])
         }
     }
 
@@ -149,7 +160,7 @@ impl SPPath {
         if self.path.is_empty() {
             SPPath::new()
         } else {
-            SPPath::from_slice(&self.path[1..])
+            SPPath::from(&self.path[1..])
         }
     }
 
@@ -195,48 +206,48 @@ mod tests_paths {
     use super::*;
     #[test]
     fn making() {
-        let ab = SPPath::from_slice(&["a", "b"]);
+        let ab = SPPath::from(&["a", "b"]);
         let ab_v2 = SPPath::new();
         let ab_v2 = ab_v2.add_child("a").add_child("b");
-        let ab_v3 = SPPath::from_string("a/b");
+        let ab_v3 = SPPath::from("a.b");
 
-        assert_eq!(ab.to_string(), "/a/b".to_string());
+        assert_eq!(ab.to_string(), "a.b".to_string());
         assert_eq!(ab_v2, ab);
         assert_eq!(ab_v3, ab);
-        assert_ne!(SPPath::from_string("b/a"), ab);
-        assert_ne!(SPPath::from_slice(&["b", "a"]), ab);
-        assert_ne!(SPPath::from_slice(&["a", "b", "c"]), ab);
+        assert_ne!(SPPath::from("b.a"), ab);
+        assert_ne!(SPPath::from(&["b", "a"]), ab);
+        assert_ne!(SPPath::from(&["a", "b", "c"]), ab);
     }
 
     #[test]
     fn drop_parent() {
-        let mut ab = SPPath::from_slice(&["a", "b", "c"]);
-        let parent = SPPath::from_slice(&["a", "b"]);
+        let mut ab = SPPath::from(&["a", "b", "c"]);
+        let parent = SPPath::from(&["a", "b"]);
         ab.drop_parent(&parent).unwrap();
-        assert_eq!(ab, SPPath::from_slice(&["c"]));
+        assert_eq!(ab, SPPath::from(&["c"]));
 
-        let mut ab = SPPath::from_slice(&["a", "b", "c"]);
-        let parent = SPPath::from_slice(&["a", "b", "c"]);
+        let mut ab = SPPath::from(&["a", "b", "c"]);
+        let parent = SPPath::from(&["a", "b", "c"]);
         ab.drop_parent(&parent).unwrap();
         assert_eq!(ab, SPPath::new());
 
-        let mut ab = SPPath::from_slice(&["a", "b", "c"]);
-        let parent = SPPath::from_slice(&["a"]);
+        let mut ab = SPPath::from(&["a", "b", "c"]);
+        let parent = SPPath::from(&["a"]);
         ab.drop_parent(&parent).unwrap();
-        assert_eq!(ab, SPPath::from_slice(&["b", "c"]));
+        assert_eq!(ab, SPPath::from(&["b", "c"]));
     }
 
     #[test]
     fn drop_parent_fail() {
-        let mut ab = SPPath::from_slice(&["a", "b", "c"]);
-        let parent = SPPath::from_slice(&["a", "c"]);
+        let mut ab = SPPath::from(&["a", "b", "c"]);
+        let parent = SPPath::from(&["a", "c"]);
         let res = ab.drop_parent(&parent);
         assert!(res.is_err())
     }
 
     #[test]
     fn get_next_name() {
-        let p = SPPath::from_string("a/b/c/d");
+        let p = SPPath::from("a.b.c.d");
         println! {"{}", serde_json::to_string(&p).unwrap()};
     }
 }

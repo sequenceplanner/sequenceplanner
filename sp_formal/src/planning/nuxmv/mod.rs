@@ -62,11 +62,11 @@ impl fmt::Display for NuXMVPredicate<'_> {
             Predicate::EQ(x, y) => {
                 let xx = match x {
                     PredicateValue::SPValue(v) => format!("{}", NuXMVValue(v)),
-                    PredicateValue::SPPath(p) => format!("{}", NuXMVPath(p)),
+                    PredicateValue::SPPath(p, _) => format!("{}", NuXMVPath(p)),
                 };
                 let yy = match y {
                     PredicateValue::SPValue(v) => format!("{}", NuXMVValue(v)),
-                    PredicateValue::SPPath(p) => format!("{}", NuXMVPath(p)),
+                    PredicateValue::SPPath(p, _) => format!("{}", NuXMVPath(p)),
                 };
 
                 format!("( {xx} = {yy} )")
@@ -74,11 +74,11 @@ impl fmt::Display for NuXMVPredicate<'_> {
             Predicate::NEQ(x, y) => {
                 let xx = match x {
                     PredicateValue::SPValue(v) => format!("{}", NuXMVValue(v)),
-                    PredicateValue::SPPath(p) => format!("{}", NuXMVPath(p)),
+                    PredicateValue::SPPath(p, _) => format!("{}", NuXMVPath(p)),
                 };
                 let yy = match y {
                     PredicateValue::SPValue(v) => format!("{}", NuXMVValue(v)),
-                    PredicateValue::SPPath(p) => format!("{}", NuXMVPath(p)),
+                    PredicateValue::SPPath(p, _) => format!("{}", NuXMVPath(p)),
                 };
 
                 format!("( {xx} != {yy} )")
@@ -96,7 +96,7 @@ fn action_to_string(a: &Action) -> Option<String> {
     match &a.value {
         Compute::PredicateValue(pv) => match pv {
             PredicateValue::SPValue(spval) => Some(format!("{}", NuXMVValue(spval))),
-            PredicateValue::SPPath(path) => Some(format!("{}", NuXMVPath(path))),
+            PredicateValue::SPPath(path, _) => Some(format!("{}", NuXMVPath(path))),
         },
         Compute::Predicate(p) => Some(format!("{}", NuXMVPredicate(p))),
         _ => None,
@@ -186,7 +186,7 @@ fn postprocess_nuxmv_problem(
             last = PlanningFrame::default();
         } else {
             let path_val: Vec<_> = l.split('=').map(|s| s.trim()).collect();
-            let path: SPPath = (*path_val.get(0).expect("no value!")).into();
+            let path: SPPath = (*path_val.first().expect("no value!")).into();
             let sppath = path.clone();
             let val = path_val.get(1).expect("no value!");
 
@@ -206,7 +206,7 @@ fn postprocess_nuxmv_problem(
                 };
 
                 let spval = spval_from_nuxvm(val, spt);
-                last.state.insert(sppath.clone(), spval);
+                last.state.add_variable(sppath.clone(), spval);
             }
         }
     }
@@ -249,7 +249,7 @@ pub fn plan_async(
             let plan_found = plan.is_some();
             let trace = plan.unwrap_or_else(|| {
                 vec![PlanningFrame {
-                    transition: SPPath("".into()),
+                    transition: "".into(),
                     state: state.clone(),
                 }]
             });
@@ -369,8 +369,8 @@ pub fn plan_async_with_cache(
 ) -> PlanningResult {
     let now = std::time::Instant::now();
     // filter the state based on the ts model and serialize it to make it hashable
-    let paths: Vec<_> = model.vars.iter().map(|v| &v.path).collect();
-    let filtered_state = state.filter_keys(&paths);
+    let paths: Vec<_> = model.vars.iter().map(|v| v.path.clone()).collect();
+    let filtered_state = state.filter_by_paths(&paths);
     let state_str = filtered_state.to_string();
 
     // serialize goals
@@ -501,7 +501,7 @@ impl Planner for NuXmvPlanner {
                 let plan_found = plan.is_some();
                 let trace = plan.unwrap_or_else(|| {
                     vec![PlanningFrame {
-                        transition: SPPath(String::new()),
+                        transition: "".into(),
                         state: state.clone(),
                     }]
                 });
@@ -751,17 +751,15 @@ fn add_current_valuations(lines: &mut String, vars: &[Variable], state: &SPState
     lines.push_str("ASSIGN\n\n");
 
     for v in vars {
-        //let value = state.sp_value_from_path(path).expect("all variables need a valuation!");
-        if let Some(value) = state.get(&v.path) {
-            let path = NuXMVPath(&v.path);
-            let value = NuXMVValue(value);
-            lines.push_str(&format!(
-                "{i}init({v}) := {spv};\n",
-                i = indent(2),
-                v = path,
-                spv = value
-            ));
-        }
+        let value = state.sp_value_from_path(&v.path).expect("all variables need a valuation!");
+        let path = NuXMVPath(&v.path);
+        let value = NuXMVValue(value);
+        lines.push_str(&format!(
+            "{i}init({v}) := {spv};\n",
+            i = indent(2),
+            v = path,
+            spv = value
+        ));
     }
 
     lines.push_str("\n\n");

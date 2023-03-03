@@ -8,4 +8,6 @@ sp_domain = { path = "../sp_domain/" }
 sp_model_derive = { path = "../sp_model_derive/" }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-illicit = "1.1.2"
+
+[dev-dependencies]
+sp_formal = { path = "../sp_formal/" }

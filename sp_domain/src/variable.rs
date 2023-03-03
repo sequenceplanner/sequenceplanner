@@ -10,12 +10,6 @@ pub struct Variable {
     pub initial_state: SPValue,
 }
 
-impl HasPath for Variable {
-    fn get_path(&self) -> &SPPath {
-        &self.path
-    }
-}
-
 impl ToPredicateValue for Variable {
     fn to_predicate_value(&self) -> PredicateValue {
         PredicateValue::SPPath(self.path.clone(), None)

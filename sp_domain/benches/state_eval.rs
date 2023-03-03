@@ -18,8 +18,8 @@ fn bench_state_eval() {
         let var = SPPath::from(format!("var_{i}"));
         state.add_variable(var.clone(), false.to_spvalue());
 
-        let t1 = Transition::new("t1".into(), p!(! p: var), vec![a!(p: var)]);
-        let t2 = Transition::new("t2".into(), p!(p: var), vec![a!(!p: var)]);
+        let t1 = Transition::new("t1".into(), p!(! var), vec![a!(var)]);
+        let t2 = Transition::new("t2".into(), p!(var), vec![a!(!var)]);
         trans.push(t1);
         trans.push(t2);
     }
@@ -45,11 +45,11 @@ fn bench_simple_state_eval() {
     let mut trans = vec![];
     for i in 1..100 {
         let string = format!("var_{i}");
-        let var = SPPath::from_string(&string);
+        let var = SPPath::from(string.clone());
         state.insert(string, false.to_spvalue());
 
-        let t1 = Transition::new("t1", p!(! p: var), vec![a!(p: var)]);
-        let t2 = Transition::new("t2", p!(p: var), vec![a!(!p: var)]);
+        let t1 = Transition::new("t1".into(), p!(! var), vec![a!(var)]);
+        let t2 = Transition::new("t2".into(), p!(var), vec![a!(!var)]);
         trans.push(t1);
         trans.push(t2);
     }
@@ -67,7 +67,8 @@ fn bench_simple_state_eval() {
 
 
 pub fn criterion_benchmark(c: &mut Criterion) {
-    c.bench_function("state_eval", |b| b.iter(|| bench_simple_state_eval()));
+    c.bench_function("state_eval", |b| b.iter(|| bench_state_eval()));
+    c.bench_function("simple_state_eval", |b| b.iter(|| bench_simple_state_eval()));
 }
 
 criterion_group!(benches, criterion_benchmark);

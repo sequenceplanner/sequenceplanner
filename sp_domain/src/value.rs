@@ -206,7 +206,14 @@ where
     T: ToSPValue,
 {
     fn to_predicate_value(&self) -> PredicateValue {
-        PredicateValue::SPValue(self.to_spvalue())
+        let pv = PredicateValue::SPValue(self.to_spvalue());
+        if let PredicateValue::SPValue(SPValue::String(s)) = &pv {
+            if s.starts_with("p:") {
+                let path = s.trim_start_matches("p:").trim().into();
+                return PredicateValue::SPPath(path, None);
+            }
+        }
+        pv
     }
 }
 

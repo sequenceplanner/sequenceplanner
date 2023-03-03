@@ -44,17 +44,17 @@ impl fmt::Display for Transition {
 
 impl EvaluatePredicate for Transition {
     fn eval(&self, state: &SPState) -> bool {
-        self.guard.eval(state)
+        self.guard.eval(state) && self.actions.iter().all(|a| a.eval(state))
     }
 
     fn eval2(&self, state: &SPState2) -> bool {
-        self.guard.eval2(state) && self.actions.iter().all(|a| a.eval2(state))
+        self.guard.eval2(state)
     }
 }
 
 impl NextAction for Transition {
     fn next(&self, state: &mut SPState) -> SPResult<()> {
-        for a in self.actions.iter() {
+        for a in &self.actions {
             a.next(state)?;
         }
         Ok(())
@@ -74,21 +74,18 @@ mod test_items {
 
     #[test]
     fn testing_transitions() {
-        let ab = SPPath::from_slice(&["a", "b"]);
-        let ac = SPPath::from_slice(&["a", "c"]);
-        let kl = SPPath::from_slice(&["k", "l"]);
-        let xy = SPPath::from_slice(&["x", "y"]);
+        let ab = SPPath::from(&["a", "b"]);
+        let ac = SPPath::from(&["a", "c"]);
+        let kl = SPPath::from(&["k", "l"]);
+        let xy = SPPath::from(&["x", "y"]);
 
         let mut s = state!(ab => 2, ac => true, kl => 3, xy => false);
-        let p = p!([!p: ac] && [!p: xy]);
 
-        let a = a!(p: ac = false);
-        let b = a!(p:ab <- p:kl);
-        let c = a!(p:xy ? p);
+        let a = a!(ac = false);
+        let b = a!(ab = kl);
 
-        let t1 = Transition::new("t1", p!(p: ac), vec![a]);
-        let t2 = Transition::new("t2", p!(!p: ac), vec![b]);
-        let t3 = Transition::new("t3", Predicate::TRUE, vec![c]);
+        let t1 = Transition::new("t1".into(), p!(ac), vec![a]);
+        let t2 = Transition::new("t2".into(), p!(!ac), vec![b]);
 
         let res = t1.eval(&s);
         println!("t1.eval: {:?}", res);
@@ -109,14 +106,5 @@ mod test_items {
 
         s.take_transition();
         assert_eq!(s.sp_value_from_path(&ab).unwrap(), &3.to_spvalue());
-
-        s.take_transition();
-        let res = t3.eval(&s);
-        println!("t3: {:?}", res);
-        assert!(res);
-        t3.next(&mut s).unwrap();
-
-        s.take_transition();
-        assert_eq!(s.sp_value_from_path(&xy).unwrap(), &true.to_spvalue());
     }
 }
