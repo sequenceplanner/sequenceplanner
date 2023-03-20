@@ -48,7 +48,8 @@ fn make_model() {
     let mut state = SPState::new_from_variables(&vars);
     println!("initial_state:\n{}", state);
 
-    let _input_mapping = model.resource1.setup_inputs("test_input_topic");
+    let input_mapping = model.resource1.setup_inputs("test_input_topic", "std_msgs/msg/String");
+    println!("input_mapping\n{:#?}", input_mapping);
     let output_mapping = model.resource1.setup_outputs("test_topic", "std_msgs/msg/String");
     println!("output_mapping\n{:#?}", output_mapping);
 
@@ -107,6 +108,34 @@ fn model_and_planner() {
     tsm.transitions.push(t2);
 
     let goal = p!([m.r1.x == "two"] && [m.r2.y]);
+
+    let result = plan(&tsm, &[(goal.clone(), None)], &state, 5);
+    assert!(result.is_ok());
+    assert!(result.unwrap().plan_found);
+}
+
+
+#[test]
+fn empty_model_with_operation() {
+    #[derive(Resource)]
+    struct Model {
+    }
+
+    let m: Model = Model::new("m");
+
+    let mut vars = m.get_variables();
+    let (op_var, op_trans) = operation("test_op".into(),
+                                       Predicate::TRUE, vec![],
+                                       Predicate::TRUE, vec![],
+                                       Predicate::TRUE, vec![],
+                                       Predicate::TRUE, vec![]);
+    vars.push(op_var.clone());
+
+    let mut tsm = TransitionSystemModel::default();
+    tsm.vars.extend(vars);
+    tsm.transitions.extend(get_formal_transitions(&op_trans));
+    let state = SPState::new_from_variables(&tsm.vars);
+    let goal = p!(op_var == "f"); // goal is operation should be finished.
 
     let result = plan(&tsm, &[(goal.clone(), None)], &state, 5);
     assert!(result.is_ok());

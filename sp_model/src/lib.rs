@@ -9,9 +9,18 @@ pub trait Resource {
     fn get_input_mapping(&self) -> Vec<(SPPath, SPPath)>;
     fn get_output_mapping(&self) -> Vec<(SPPath, SPPath)>;
 
-    fn setup_inputs(&self, topic: &str) {
-
-        println!("{topic}: {:?}", self.get_input_mapping());
+    fn setup_inputs(&self, topic: &str, msg_type: &str) -> Message {
+        Message {
+            name: topic.into(),
+            topic: topic.into(),
+            category: MessageCategory::Incoming,
+            message_type: MessageType::Ros(msg_type.to_owned()),
+            variables: self.get_input_mapping().iter().map(
+                |(v1, v2)| MessageVariable::new(v1,v2)).collect(),
+            variables_response: vec!(),
+            variables_feedback: vec!(),
+            send_predicate: Predicate::TRUE
+        }
     }
 
     fn setup_outputs(&self, topic: &str, msg_type: &str) -> Message {
@@ -90,32 +99,75 @@ pub enum TransitionType {
     Runner,
 }
 
+impl TransitionType {
+    fn is_formal(&self) -> bool {
+        self != &TransitionType::Runner
+    }
+}
+
 /// A transition in the context of a model is made up of potentially
 /// several basic transitions. E.g. one transition for planning and
 /// additional runner transitions.
+/// They will execute in synchrony by the runner.
 #[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
 pub struct ModelTransition {
     pub transitions: Vec<(Transition, TransitionType)>
 }
 
+pub fn get_formal_transitions(mts: &[ModelTransition]) -> Vec<Transition> {
+    let mut trans = vec![];
+    for mt in mts {
+        for (t, tt) in &mt.transitions {
+            if tt.is_formal() {
+                trans.push(t.clone());
+            }
+        }
+    }
+    trans
+}
+
+/// Operations can abstract away implementation details from the planner.
+/// By defaut, only i -> e -> i are included in the formal representation.
 pub fn operation(path: SPPath,
-                 mut pre: Predicate,
-                 mut actions: Vec<Action>,
-                 mut post: Predicate,
-                 mut post_actions: Vec<Action>) -> Vec<ModelTransition> {
-    pre = p!([path == "i"] && [pre]);
-    actions.push(a!(path = "e"));
+                 formal_pre: Predicate,
+                 formal_actions: Vec<Action>,
+                 runner_pre: Predicate,
+                 runner_actions: Vec<Action>,
+                 formal_post: Predicate,
+                 formal_post_actions: Vec<Action>,
+                 runner_post: Predicate,
+                 runner_post_actions: Vec<Action>) -> (Variable, Vec<ModelTransition>) {
+    let mut var = Variable::new(path.clone(), SPValueType::String,
+                                vec!["i".to_spvalue(),
+                                     "e".to_spvalue(),
+                                     "f".to_spvalue()]);
+    var.initial_state = "i".to_spvalue();
+    let formal_pre = p!([path == "i"] && [formal_pre]);
+    let mut formal_actions = formal_actions.clone();
+    formal_actions.push(a!(path = "e"));
 
-    post = p!([path == "e"] && [post]);
-    // TODO: reset transitions etc.
-    post_actions.push(a!(path = "i"));
+    let formal_post = p!([path == "e"] && [formal_post]);
+    let mut formal_post_actions = formal_post_actions.clone();
+    formal_post_actions.push(a!(path = "f"));
 
-    vec![
+    let trans = vec![
         ModelTransition {
             transitions: vec![
-                (Transition::new(path.add_child("op_start".into()), pre, actions), TransitionType::Runner),
-                (Transition::new(path.add_child("op_finish".into()), post, post_actions), TransitionType::Runner)
+                (Transition::new(path.add_child("formal_start".into()), formal_pre, formal_actions),
+                 TransitionType::Controlled),
+                (Transition::new(path.add_child("runner_start".into()), runner_pre, runner_actions),
+                 TransitionType::Runner),
+            ]
+        },
+        ModelTransition {
+            transitions: vec![
+                (Transition::new(path.add_child("formal_finish".into()), formal_post, formal_post_actions),
+                 TransitionType::Auto),
+                (Transition::new(path.add_child("runner_finish".into()), runner_post, runner_post_actions),
+                 TransitionType::Runner),
             ]
         }
-    ]
+    ];
+
+    (var, trans)
 }
