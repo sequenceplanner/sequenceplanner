@@ -1,13 +1,10 @@
 use crate::planning::*;
-// use chrono::offset::Local;
-// use chrono::DateTime;
 use std::collections::HashSet;
 use std::fmt;
 use std::fs::File;
 use std::io::{Read, Write};
 use std::process::{Command, Stdio};
 use std::time::Instant;
-// use std::time::{SystemTime};
 use std::time::Duration;
 
 mod find_binary;
@@ -222,15 +219,10 @@ pub fn plan_async(
 ) -> PlanningResult {
     let lines = create_nuxmv_problem(model, goals, state);
 
-    //let datetime: DateTime<Local> = SystemTime::now().into();
-    // todo: use non platform way of getting temporary folder
-    // or maybe just output to a subfolder 'plans'
-    // let filename = &format!("/tmp/async_planner {}.bmc", datetime);
-    // let mut f = File::create(filename).unwrap();
-    // write!(f, "{}", lines).unwrap();
-    let filename_last_plan = "./last_async_planning_request.bmc";
-    let mut f = File::create(filename_last_plan).unwrap();
+    let mut f = tempfile::NamedTempFile::new().expect("Could not create tempfile");
     write!(f, "{lines}").unwrap();
+    let tempfile = f.into_temp_path();
+    let filename_last_plan = tempfile.as_os_str().to_str().expect("invalid path");
 
     let start = Instant::now();
     let result =
@@ -278,11 +270,6 @@ pub fn plan_async(
             time_to_solve: duration,
         },
     };
-
-    // if res.plan_found {
-    //     // usually dont care to debug these
-    //     let _ = std::fs::remove_file(filename);
-    // }
 
     res
 }
@@ -454,15 +441,10 @@ impl Planner for NuXmvPlanner {
     ) -> Result<PlanningResult, String> {
         let lines = create_nuxmv_problem(model, goals, state);
 
-        //let datetime: DateTime<Local> = SystemTime::now().into();
-        // todo: use non platform way of getting temporary folder
-        // or maybe just output to a subfolder 'plans'
-        //let filename = &format!("/tmp/planner {}.bmc", datetime);
-        //let mut f = File::create(filename).unwrap();
-        //write!(f, "{}", lines).unwrap();
-        let filename_last_plan = "./last_planning_request.bmc";
-        let mut f = File::create(filename_last_plan).unwrap();
+        let mut f = tempfile::NamedTempFile::new().expect("Could not create tempfile");
         write!(f, "{lines}").unwrap();
+        let tempfile = f.into_temp_path();
+        let filename_last_plan = tempfile.as_os_str().to_str().expect("invalid path");
 
         let start = Instant::now();
         let result = call_nuxmv(max_steps, filename_last_plan);
@@ -522,10 +504,6 @@ impl Planner for NuXmvPlanner {
                 panic!("Something went wrong when invoking planner: {}", e);
             }
         };
-        // if res.plan_found {
-        //     // usually dont care to debug these
-        //     let _ = std::fs::remove_file(filename);
-        // }
         Ok(res)
     }
 }
@@ -587,14 +565,6 @@ pub fn generate_offline_nuxvm_ctl(
     model: &TransitionSystemModel, initial: &Predicate, ops: &[(String, Predicate, Predicate)],
 ) {
     let lines = create_nuxmv_problem_ctl(model, initial, ops);
-
-    //let datetime: DateTime<Local> = SystemTime::now().into();
-    // todo: use non platform way of getting temporary folder
-    // or maybe just output to a subfolder 'plans'
-    // let filename = &format!("/tmp/model_out_{} {}.bmc", model.name, datetime);
-    // let mut f = File::create(filename).unwrap();
-    // write!(f, "{}", lines).unwrap();
-
     let filename = &format!("./last_model_out_{}.bmc", model.name);
     let mut f = File::create(filename).unwrap();
     write!(f, "{lines}").unwrap();
@@ -602,14 +572,6 @@ pub fn generate_offline_nuxvm_ctl(
 
 pub fn generate_offline_nuxvm(model: &TransitionSystemModel, initial: &Predicate) {
     let lines = create_offline_nuxmv_problem(model, initial);
-
-    //let datetime: DateTime<Local> = SystemTime::now().into();
-    // todo: use non platform way of getting temporary folder
-    // or maybe just output to a subfolder 'plans'
-    // let filename = &format!("/tmp/model_out_{} {}.bmc", model.name, datetime);
-    // let mut f = File::create(filename).unwrap();
-    // write!(f, "{}", lines).unwrap();
-
     let filename = &format!("./last_model_out_{}.bmc", model.name);
     let mut f = File::create(filename).unwrap();
     write!(f, "{lines}").unwrap();

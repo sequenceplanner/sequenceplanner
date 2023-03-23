@@ -25,7 +25,10 @@ impl Ticker {
         let mut fired = Vec::new();
         let mut counter = 0;
         loop {
-            let f = self.tick_auto();
+            let mut f = self.tick_auto();
+            if let Some(p) = self.tick_first_controlled() {
+                f.push(p);
+            }
 
             if f.is_empty() {
                 // println!("f empty, fired is {:?}", fired);
@@ -141,7 +144,9 @@ mod test_new_ticker {
 
         let mut ticker = Ticker {
             state: s,
-            auto_transitions: vec![t1 ,t2],
+            auto_transitions: vec![t1],
+            controlled_queue: vec![t2.path.clone()],
+            controlled_transitions: vec![t2],
             .. Ticker::default()
         };
         ticker.update_state_paths();
@@ -150,29 +155,4 @@ mod test_new_ticker {
         println!("FIRED: {:?}", res);
     }
 
-    // #[test]
-    // fn testing_large_model() {
-    //     let plan = SPPath::from_string("plan");
-    //     let mut s = state!(plan => 1);
-
-    //     let ts: Vec<Transition> = (1..100)
-    //         .map(|i| {
-    //             let g = p! {plan == i};
-    //             let a = a!(plan = (i + 1));
-    //             let rg = Predicate::TRUE;
-    //             let ra = vec![];
-    //             Transition::new(&format!("t_{}", i), g, rg, vec![a], ra, TransitionType::Auto)
-    //         })
-    //         .collect();
-
-    //     let upd_ts: Vec<Vec<&Transition>> = ts.iter().map(|t| (vec![t])).collect();
-    //     let _x = &upd_ts;
-
-    //     let ps = vec![];
-    //     for _i in 1..100 {
-    //         let res = SPTicker::tick(&mut s, &upd_ts, &ps);
-    //         s.take_transition();
-    //         println!("fired: {:?}, state: {:?}", res, s.sp_value_from_path(&plan));
-    //     }
-    // }
 }
