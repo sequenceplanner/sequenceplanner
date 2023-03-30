@@ -3,8 +3,8 @@ use serde::{Deserialize, Serialize};
 
 // For derive macro.
 pub use sp_model_derive::Resource;
-pub trait Resource {
-    fn new(name: &str) -> Self;
+pub trait Resource: Clone {
+    fn new(name: &str) -> Self where Self: Sized;
     fn get_variables(&self) -> Vec<Variable>;
     fn get_input_mapping(&self) -> Vec<(SPPath, SPPath)>;
     fn get_output_mapping(&self) -> Vec<(SPPath, SPPath)>;

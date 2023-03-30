@@ -1,0 +1,21 @@
+[package]
+name = "sp_ros"
+version = "0.0.1"
+authors = ["Martin Dahl <martin.dahl@gmail.com>"]
+edition = "2018"
+
+[features]
+ros = ["r2r"]
+
+[dependencies]
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+r2r = { version = "0.7.0", optional = true }
+tokio = { version = "1", features = ["full"] }
+futures = "0.3.15"
+sp_domain = { path = "../sp_domain/" }
+sp_model = { path = "../sp_model/" }
+
+[dev-dependencies]
+tokio-test = "*"
+serial_test = "0.5"

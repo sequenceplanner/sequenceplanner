@@ -477,6 +477,26 @@ impl SPState {
         self.state_value_from_index(i).value()
     }
 
+
+    /// Update the value of a list of named predicates given that they
+    /// have they correct state paths.
+    pub fn upd_preds(&mut self, ps: &[NamedPredicate]) {
+        for p in ps {
+            let new_value = p.predicate.eval(&self).to_spvalue();
+            if let Some(sp) = &p.state_path {
+                if let Err(e) = self.force(sp, new_value) {
+                    eprintln!(
+                        "The predicate {:?} does not have an updated state path. Got error: {}",
+                        p.path, e
+                    );
+                }
+            } else {
+                eprintln!("The predicate {:?} does not have an updated state path.", p.path);
+            }
+        }
+    }
+
+
     /// Get a projection of the state
     pub fn projection(&self) -> StateProjection {
         let s: Vec<(&SPPath, &StateValue)> = self
@@ -602,7 +622,7 @@ impl SPState {
             Err(SPError::No(format!("Can not find the path: {path:?}")))
         }
     }
-    pub fn force(&mut self, state_path: &StatePath, value: &SPValue) -> SPResult<()> {
+    pub fn force(&mut self, state_path: &StatePath, value: SPValue) -> SPResult<()> {
         if !self.check_state_path(state_path) {
             Err(SPError::No(format!(
                 "The state path is not ok: sp_id:{}, s_id:{}, s_len:{}, index:{}",
@@ -612,11 +632,11 @@ impl SPState {
                 state_path.index
             )))
         } else {
-            self.values[state_path.index].force(value.clone());
+            self.values[state_path.index].force(value);
             Ok(())
         }
     }
-    pub fn force_from_path(&mut self, path: &SPPath, value: &SPValue) -> SPResult<()> {
+    pub fn force_from_path(&mut self, path: &SPPath, value: SPValue) -> SPResult<()> {
         if let Some(sp) = self.state_path(path) {
             self.force(&sp, value)
         } else {
@@ -845,18 +865,18 @@ mod sp_value_test {
         let ac = s.state_path(&SPPath::from(&["a", "c"])).unwrap();
 
         let mut new_s = s.clone();
-        new_s.force(&ab, &3.to_spvalue()).unwrap();
+        new_s.force(&ab, 3.to_spvalue()).unwrap();
 
         println!("{}", s.difference(&new_s));
         println!();
 
-        new_s.force(&ab, &2.to_spvalue()).unwrap();
+        new_s.force(&ab, 2.to_spvalue()).unwrap();
 
         println!("{}", s.difference(&new_s));
         println!();
 
-        new_s.force(&ab, &4.to_spvalue()).unwrap();
-        new_s.force(&ac, &2.to_spvalue()).unwrap();
+        new_s.force(&ab, 4.to_spvalue()).unwrap();
+        new_s.force(&ac, 2.to_spvalue()).unwrap();
 
         println!("{}", s.difference(&new_s));
         println!();

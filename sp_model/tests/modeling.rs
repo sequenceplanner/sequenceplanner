@@ -4,7 +4,7 @@ use sp_formal::*;
 
 /// A test model using nested structs and improved predicate macro.
 
-#[derive(Resource)]
+#[derive(Resource, Clone)]
 struct Resource1 {
     #[Variable(type = "String", initial = "hej", domain = "hej svejs")]
     #[Output(mapping = "hello")]
@@ -26,14 +26,14 @@ struct Resource1 {
     nested: Resource2,
 }
 
-#[derive(Resource)]
+#[derive(Resource, Clone)]
 struct Resource2 {
     // No initial value set here, will be SPValue::Unknown.
     #[Variable(type = "String", domain = "hej svejs")]
     variable_string: Variable,
 }
 
-#[derive(Resource)]
+#[derive(Resource, Clone)]
 struct Model {
     #[Resource]
     resource1: Resource1,
@@ -72,21 +72,21 @@ fn make_model() {
 
 #[test]
 fn model_and_planner() {
-    #[derive(Resource)]
+    #[derive(Resource, Clone)]
     struct Resource1 {
         // No initial value set here, will be SPValue::Unknown.
         #[Variable(type = "String", initial = "one", domain = "one two")]
         x: Variable,
     }
 
-    #[derive(Resource)]
+    #[derive(Resource, Clone)]
     struct Resource2 {
         // No initial value set here, will be SPValue::Unknown.
         #[Variable(type = "bool", initial = false)]
         y: Variable,
     }
 
-    #[derive(Resource)]
+    #[derive(Resource, Clone)]
     struct Model {
         #[Resource]
         r1: Resource1,
@@ -117,7 +117,7 @@ fn model_and_planner() {
 
 #[test]
 fn empty_model_with_operation() {
-    #[derive(Resource)]
+    #[derive(Resource, Clone)]
     struct Model {
     }
 

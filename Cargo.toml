@@ -5,4 +5,5 @@ members = [
     "sp_model",
     "sp_formal",
     "sp_runner",
+    "sp_ros",
 ]

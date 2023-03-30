@@ -1,20 +1,14 @@
 use sp_domain::*;
 
-#[derive(Debug, PartialEq, Clone)]
-pub struct RunnerPredicate(StatePath, Predicate);
-
 #[derive(Debug, PartialEq, Clone, Default)]
 pub struct Ticker {
     pub state: SPState,
 
+    /// Controlled transitions (those that are controlled by the planner)
     pub controlled_transitions: Vec<Transition>,
-    pub auto_transitions: Vec<Transition>,
-    pub runner_transitions: Vec<Transition>,
-
+    /// Runner transitions, auto transitions, effects
+    pub uncontrolled_transitions: Vec<Transition>,
     pub predicates: Vec<NamedPredicate>,
-
-    /// Predicates with computed statepaths
-    pub runner_predicates: Vec<RunnerPredicate>,
 
     /// Allowed to run
     pub controlled_queue: Vec<SPPath>,
@@ -22,45 +16,22 @@ pub struct Ticker {
 
 impl Ticker {
     pub fn tick_transitions(&mut self) -> Vec<SPPath> {
-        let mut fired = Vec::new();
-        let mut counter = 0;
-        loop {
-            let mut f = self.tick_auto();
-            if let Some(p) = self.tick_first_controlled() {
-                f.push(p);
-            }
-
-            if f.is_empty() {
-                // println!("f empty, fired is {:?}", fired);
-                break;
-            } else {
-                counter += 1;
-                if counter > 10 {
-                    // there is probably a self loop in the model
-                    let t_names = f
-                        .iter()
-                        .map(|p| p.to_string())
-                        .collect::<Vec<_>>()
-                        .join(",");
-                    panic!("self loop with transitions {t_names}");
-                    // break;
-                }
-                println!("runner one more time! adding new fired {f:?}");
-                fired.extend(f);
-            }
+        let mut fired = self.tick_uncontrolled();
+        if let Some(p) = self.tick_first_controlled() {
+            fired.push(p);
         }
         fired
     }
 
-    pub fn tick_auto(&mut self) -> Vec<SPPath> {
-        Ticker::upd_preds(&mut self.state, &self.runner_predicates);
-        self.auto_transitions
+    pub fn tick_uncontrolled(&mut self) -> Vec<SPPath> {
+        self.state.upd_preds(&self.predicates);
+        self.uncontrolled_transitions
             .iter()
             .flat_map(|t| {
                 if !t.actions.is_empty() && t.eval(&self.state) {
                     // TODO: handle errors
                     let _r = t.next(&mut self.state);
-                    Ticker::upd_preds(&mut self.state, &self.runner_predicates);
+                    self.state.upd_preds(&self.predicates);
                     Some(t.path.clone())
                 } else {
                     None
@@ -70,13 +41,13 @@ impl Ticker {
     }
 
     pub fn tick_first_controlled(&mut self) -> Option<SPPath> {
-        Ticker::upd_preds(&mut self.state, &self.runner_predicates);
+        self.state.upd_preds(&self.predicates);
         if let Some(first) = self.controlled_queue.first() {
             if let Some(first) = self.controlled_transitions.iter().find(|t|&t.path == first) {
                 if first.eval(&self.state) {
                     // TODO: handle errors
                     let _r = first.next(&mut self.state);
-                    Ticker::upd_preds(&mut self.state, &self.runner_predicates);
+                    self.state.upd_preds(&self.predicates);
                     let _throw_first = self.controlled_queue.pop();
                     return Some(first.path.clone());
                 }
@@ -85,38 +56,20 @@ impl Ticker {
         None
     }
 
-    pub fn upd_preds(state: &mut SPState, rps: &[RunnerPredicate]) {
-        for rp in rps {
-            let value = rp.1.eval(state).to_spvalue();
-            if let Err(e) = state.force(&rp.0, &value) {
-                eprintln!(
-                    "The predicate {:?} does not have an updated state path. Got error: {}",
-                    rp.0, e
-                );
-            }
-        }
-    }
-
-
     /// After changing anything in the Ticker, run this method to update the state variables.
     pub fn update_state_paths(&mut self) {
         for x in self.controlled_transitions.iter_mut() {
             x.upd_state_path(&self.state)
         }
-        for x in self.auto_transitions.iter_mut() {
+        for x in self.uncontrolled_transitions.iter_mut() {
             x.upd_state_path(&self.state)
         }
-        for x in self.runner_transitions.iter_mut() {
-            x.upd_state_path(&self.state)
-        }
-
-        let psp: Vec<RunnerPredicate> = self.predicates.iter()
-            .map(|p| RunnerPredicate(self.state.state_path(&p.path).expect("pred not in state"),
-                                     p.predicate.clone())).collect();
-        self.runner_predicates = psp;
 
         // also update any new predicates with values their correct assignments
-        Ticker::upd_preds(&mut self.state, &self.runner_predicates);
+        for x in self.predicates.iter_mut() {
+            x.upd_state_path(&self.state);
+        }
+        self.state.upd_preds(&self.predicates);
     }
 }
 
@@ -144,7 +97,7 @@ mod test_new_ticker {
 
         let mut ticker = Ticker {
             state: s,
-            auto_transitions: vec![t1],
+            uncontrolled_transitions: vec![t1],
             controlled_queue: vec![t2.path.clone()],
             controlled_transitions: vec![t2],
             .. Ticker::default()
