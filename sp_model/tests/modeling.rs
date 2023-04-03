@@ -4,7 +4,7 @@ use sp_formal::*;
 
 /// A test model using nested structs and improved predicate macro.
 
-#[derive(Resource, Clone)]
+#[derive(Resource)]
 struct Resource1 {
     #[Variable(type = "String", initial = "hej", domain = "hej svejs")]
     #[Output(mapping = "hello")]
@@ -26,14 +26,14 @@ struct Resource1 {
     nested: Resource2,
 }
 
-#[derive(Resource, Clone)]
+#[derive(Resource)]
 struct Resource2 {
     // No initial value set here, will be SPValue::Unknown.
     #[Variable(type = "String", domain = "hej svejs")]
     variable_string: Variable,
 }
 
-#[derive(Resource, Clone)]
+#[derive(Resource)]
 struct Model {
     #[Resource]
     resource1: Resource1,
@@ -72,21 +72,21 @@ fn make_model() {
 
 #[test]
 fn model_and_planner() {
-    #[derive(Resource, Clone)]
+    #[derive(Resource)]
     struct Resource1 {
         // No initial value set here, will be SPValue::Unknown.
         #[Variable(type = "String", initial = "one", domain = "one two")]
         x: Variable,
     }
 
-    #[derive(Resource, Clone)]
+    #[derive(Resource)]
     struct Resource2 {
         // No initial value set here, will be SPValue::Unknown.
         #[Variable(type = "bool", initial = false)]
         y: Variable,
     }
 
-    #[derive(Resource, Clone)]
+    #[derive(Resource)]
     struct Model {
         #[Resource]
         r1: Resource1,
@@ -117,26 +117,22 @@ fn model_and_planner() {
 
 #[test]
 fn empty_model_with_operation() {
-    #[derive(Resource, Clone)]
+    #[derive(Resource)]
     struct Model {
     }
 
-    let m: Model = Model::new("m");
+    let mut mb = ModelBuilder::from(&Model::new("m"));
+    let op_var = mb.add_operation("test_op".into(),
+                                  Predicate::TRUE, vec![],
+                                  Predicate::TRUE, vec![],
+                                  Predicate::TRUE, vec![],
+                                  Predicate::TRUE, vec![]);
 
-    let mut vars = m.get_variables();
-    let (op_var, op_trans) = operation("test_op".into(),
-                                       Predicate::TRUE, vec![],
-                                       Predicate::TRUE, vec![],
-                                       Predicate::TRUE, vec![],
-                                       Predicate::TRUE, vec![]);
-    vars.push(op_var.clone());
 
-    let mut tsm = TransitionSystemModel::default();
-    tsm.vars.extend(vars);
-    tsm.transitions.extend(get_formal_transitions(&op_trans));
-    let state = SPState::new_from_variables(&tsm.vars);
+    let state = mb.get_initial_state();
     let goal = p!(op_var == "f"); // goal is operation should be finished.
 
+    let tsm = mb.make_tsm();
     let result = plan(&tsm, &[(goal.clone(), None)], &state, 5);
     assert!(result.is_ok());
     assert!(result.unwrap().plan_found);

@@ -108,7 +108,6 @@ mod ros {
     }
 
     pub fn log_info(msg: &str, file: &str, line: u32) {
-        println!("{}:{} - {}", file, line, msg);
         r2r::log(msg, SP_NODE_NAME, file, line, r2r::LogSeverity::Info);
     }
 
@@ -155,7 +154,6 @@ mod ros {
     pub struct RosComm {
         arc_node: Arc<Mutex<r2r::Node>>,
         spin_handle: tokio::task::JoinHandle<()>,
-        resources_handle: tokio::task::JoinHandle<()>,
         // sp_state: SPStateService,
 //        sp_model: SPModelService,
         resources: Arc<Mutex<Vec<ResourceComm>>>,
@@ -165,12 +163,16 @@ mod ros {
         pub async fn new(
             state_from_runner: tokio::sync::watch::Receiver<SPState>,
             state_to_runner: tokio::sync::mpsc::Sender<SPState>,
-            initial_model: impl Resource,
+            messages: &[Message],
         ) -> Result<RosComm, SPError> {
             let ctx = r2r::Context::create().map_err(SPError::from_any)?;
             let node = r2r::Node::create(ctx, SP_NODE_NAME, "").map_err(SPError::from_any)?;
             let arc_node = Arc::new(Mutex::new(node));
-            let resources =  Arc::new(Mutex::new(vec!()));
+            let rc = ResourceComm::new(arc_node.clone(),
+                                       messages,
+                                       state_from_runner.clone(),
+                                       state_to_runner.clone()).await.expect("Could not launch resources");
+            let resources =  Arc::new(Mutex::new(vec!(rc)));
 
             // let sp_state = SPStateService::new(
             //     arc_node.clone(),
@@ -179,13 +181,13 @@ mod ros {
             // ).await?;
 
 //            let model_watcher = sp_model.model_watcher();
-            let resources_handle = RosComm::launch_resources(
-                arc_node.clone(),
-                resources.clone(),
-                state_from_runner.clone(),
-                state_to_runner.clone(),
-                initial_model,
-            ).await;
+            // let resources_handle = RosComm::launch_resources(
+            //     arc_node.clone(),
+            //     resources.clone(),
+            //     state_from_runner.clone(),
+            //     state_to_runner.clone(),
+            //     initial_model,
+            // ).await;
 
             let task_arc_node = arc_node.clone();
             let spin_handle = tokio::task::spawn_blocking( move || {
@@ -203,10 +205,8 @@ mod ros {
             let rc = RosComm {
                 arc_node,
                 spin_handle,
-                resources_handle,
 //                sp_state,
                 resources,
-//                model_watcher: model_watcher.clone(),
             };
 
 
@@ -233,42 +233,6 @@ mod ros {
             }
             Ok(())
         }
-
-        async fn launch_resources(
-            arc_node: Arc<Mutex<r2r::Node>>,
-            resources: Arc<Mutex<Vec<ResourceComm>>>,
-            state_from_runner: tokio::sync::watch::Receiver<SPState>,
-            state_to_runner: tokio::sync::mpsc::Sender<SPState>,
-            model: impl Resource,
-        ) -> tokio::task::JoinHandle<()> {
-
-            tokio::spawn(async move {
-                let arc_node = arc_node.clone();
-                loop {
-                    // new_res.iter().for_each(|r| println!("XXX RESOURCES: {:?}", r.path()));
-                    // for r in new_res {
-                    //     let rc =  ResourceComm::new(
-                    //         arc_node.clone(),
-                    //         r.clone(),
-                    //         state_from_runner.clone(),
-                    //         state_to_runner.clone()
-                    //     );
-                    //     match rc.await {
-                    //         Ok(comm) => {
-                    //             let mut res = resources.lock().unwrap();
-                    //             res.push(comm);
-                    //         },
-                    //         Err(e) => {
-                    //             log_warn!("The comm for resource {} couldn't be created: {}", r.path(), e);
-                    //         }
-                    //     }
-
-                    // }
-
-                }
-            })
-        }
-
 
     }
 

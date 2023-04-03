@@ -23,7 +23,6 @@ impl ResourceComm {
         for mess in messages {
             let x = Comm::new(
                 arc_node.clone(),
-                &"test_path".into(),
                 mess.clone(),
                 state_from_runner.clone(),
                 state_to_runner.clone(),
@@ -74,20 +73,18 @@ enum Comm {
 impl Comm {
     async fn new(
         arc_node: Arc<Mutex<r2r::Node>>,
-        resource_path: &SPPath,
         mess: Message,
         state_from_runner: tokio::sync::watch::Receiver<SPState>,
         state_to_runner: tokio::sync::mpsc::Sender<SPState>,
         handle: Option<tokio::task::JoinHandle<Result<(), SPError>>>,
     ) -> Result<Comm, SPError> {
-        let resource_path = resource_path.clone();
         let res = match mess.category {
             MessageCategory::OutGoing => {
-                let x = PublisherComm::new(arc_node, mess, resource_path, state_from_runner).await;
+                let x = PublisherComm::new(arc_node, mess, state_from_runner).await;
                 x.map(Comm::Publisher)
             },
             MessageCategory::Incoming => {
-                let x = SubscriberComm::new(arc_node, mess, resource_path, state_to_runner).await;
+                let x = SubscriberComm::new(arc_node, mess, state_to_runner).await;
                 x.map(Comm::Subscriber)
             },
             MessageCategory::Service => {
@@ -95,7 +92,7 @@ impl Comm {
                 x.map(Comm::ServiceClient)
             },
             MessageCategory::Action => {
-                let x = ActionClientComm::new(arc_node, mess, resource_path, state_from_runner, state_to_runner).await;
+                let x = ActionClientComm::new(arc_node, mess, state_from_runner, state_to_runner).await;
                 x.map(Comm::ActionClient)
             }
         };
@@ -147,7 +144,6 @@ impl Comm {
 struct SubscriberComm{
     arc_node: Arc<Mutex<r2r::Node>>,
     mess: Message,
-    resource_path: SPPath,
     state_to_runner: tokio::sync::mpsc::Sender<SPState>,
     handle: Option<tokio::task::JoinHandle<Result<(), SPError>>>,
 }
@@ -156,13 +152,11 @@ impl SubscriberComm {
     async fn new(
         arc_node: Arc<Mutex<r2r::Node>>,
         mess: Message,
-        resource_path: SPPath,
         state_to_runner: tokio::sync::mpsc::Sender<SPState>,
     ) -> Result<SubscriberComm, SPError> {
         let mut sc = SubscriberComm{
             arc_node,
             mess,
-            resource_path,
             state_to_runner,
             handle: None
         };
@@ -199,8 +193,8 @@ impl SubscriberComm {
             },
             Ok(mut sub) => {
                 let sender = self.state_to_runner.clone();
-                let resource_path = self.resource_path.clone();
                 let mess = self.mess.clone();
+                println!("mess: {:?}", mess);
                 let handle = tokio::task::spawn(async move {
                     loop {
                         let msg = sub
@@ -210,7 +204,9 @@ impl SubscriberComm {
                         match msg {
                             Some(Ok(v)) => {
                                 match ros_to_state(v, &mess, &mess.variables).map_err(SPError::from_any) {
-                                    Ok(s) => {sender.send(s).await;},
+                                    Ok(s) => {
+                                        sender.send(s).await;
+                                    },
                                     Err(e) => {
                                         log_warn!("ros_to_state didnt work: {:?}", e);
                                     }
@@ -252,7 +248,6 @@ impl Drop for SubscriberComm {
 struct PublisherComm{
     arc_node: Arc<Mutex<r2r::Node>>,
     mess: Message,
-    resource_path: SPPath,
     state_from_runner: tokio::sync::watch::Receiver<SPState>,
     handle: Option<tokio::task::JoinHandle<Result<(), SPError>>>,
 }
@@ -261,13 +256,11 @@ impl PublisherComm {
     async fn new(
         arc_node: Arc<Mutex<r2r::Node>>,
         mess: Message,
-        resource_path: SPPath,
         state_from_runner: tokio::sync::watch::Receiver<SPState>,
     ) -> Result<PublisherComm, SPError> {
         let mut sc = PublisherComm {
             arc_node,
             mess,
-            resource_path,
             state_from_runner,
             handle: None
         };
@@ -308,7 +301,6 @@ impl PublisherComm {
         let publisher = publisher.unwrap();
 
         let mut state_from_runner = self.state_from_runner.clone();
-        let resource_path = self.resource_path.clone();
         let mess = self.mess.clone();
         let handle = tokio::task::spawn(async move {
             loop {
@@ -548,7 +540,6 @@ impl ActionState {
 struct ActionClientComm{
     arc_node: Arc<Mutex<r2r::Node>>,
     mess: Message,
-    resource_path: SPPath,
     state_from_runner: tokio::sync::watch::Receiver<SPState>,
     state_to_runner: tokio::sync::mpsc::Sender<SPState>,
     handle: Option<tokio::task::JoinHandle<Result<(), SPError>>>,
@@ -558,14 +549,12 @@ impl ActionClientComm {
     async fn new(
         arc_node: Arc<Mutex<r2r::Node>>,
         mess: Message,
-        resource_path: SPPath,
         state_from_runner: tokio::sync::watch::Receiver<SPState>,
         state_to_runner: tokio::sync::mpsc::Sender<SPState>,
     ) -> Result<ActionClientComm, SPError> {
         let mut sc = ActionClientComm {
             arc_node,
             mess,
-            resource_path,
             state_from_runner,
             state_to_runner,
             handle: None
@@ -835,15 +824,16 @@ fn ros_to_state(
         .iter()
         .flat_map(|v| {
         let p =  v.path.clone();
+
         let value = msg_state.sp_value_from_path(&v.ros_path);
-        if value.is_none() {
-            log_error!(
-                "Not in msg: Name {:?}, path: {}, state: {:?}",
-                &v.ros_path,
-                &p,
-                &msg_state
-            );
-        }
+        // if value.is_none() {
+        //     log_error!(
+        //         "Not in msg: Name {:?}, path: {}, state: {:?}",
+        //         &v.ros_path,
+        //         &p,
+        //         &msg_state
+        //     );
+        // }
         value.map(|v|(p, v.clone()))
     })
     .collect();

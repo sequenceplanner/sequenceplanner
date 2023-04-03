@@ -1,10 +1,11 @@
 use sp_domain::*;
+use sp_formal::*;
 use serde::{Deserialize, Serialize};
 
 // For derive macro.
 pub use sp_model_derive::Resource;
-pub trait Resource: Clone {
-    fn new(name: &str) -> Self where Self: Sized;
+pub trait Resource {
+    fn new(name: &str) -> Self;
     fn get_variables(&self) -> Vec<Variable>;
     fn get_input_mapping(&self) -> Vec<(SPPath, SPPath)>;
     fn get_output_mapping(&self) -> Vec<(SPPath, SPPath)>;
@@ -126,48 +127,90 @@ pub fn get_formal_transitions(mts: &[ModelTransition]) -> Vec<Transition> {
     trans
 }
 
-/// Operations can abstract away implementation details from the planner.
-/// By defaut, only i -> e -> i are included in the formal representation.
-pub fn operation(path: SPPath,
-                 formal_pre: Predicate,
-                 formal_actions: Vec<Action>,
-                 runner_pre: Predicate,
-                 runner_actions: Vec<Action>,
-                 formal_post: Predicate,
-                 formal_post_actions: Vec<Action>,
-                 runner_post: Predicate,
-                 runner_post_actions: Vec<Action>) -> (Variable, Vec<ModelTransition>) {
-    let mut var = Variable::new(path.clone(), SPValueType::String,
-                                vec!["i".to_spvalue(),
-                                     "e".to_spvalue(),
-                                     "f".to_spvalue()]);
-    var.initial_state = "i".to_spvalue();
-    let formal_pre = p!([path == "i"] && [formal_pre]);
-    let mut formal_actions = formal_actions.clone();
-    formal_actions.push(a!(path = "e"));
 
-    let formal_post = p!([path == "e"] && [formal_post]);
-    let mut formal_post_actions = formal_post_actions.clone();
-    formal_post_actions.push(a!(path = "f"));
+#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
+pub struct ModelBuilder {
+    pub variables: Vec<Variable>,
+    pub transitions: Vec<ModelTransition>,
 
-    let trans = vec![
-        ModelTransition {
-            transitions: vec![
-                (Transition::new(path.add_child("formal_start".into()), formal_pre, formal_actions),
-                 TransitionType::Controlled),
-                (Transition::new(path.add_child("runner_start".into()), runner_pre, runner_actions),
-                 TransitionType::Runner),
-            ]
-        },
-        ModelTransition {
-            transitions: vec![
-                (Transition::new(path.add_child("formal_finish".into()), formal_post, formal_post_actions),
-                 TransitionType::Auto),
-                (Transition::new(path.add_child("runner_finish".into()), runner_post, runner_post_actions),
-                 TransitionType::Runner),
-            ]
-        }
-    ];
+    pub messages: Vec<Message>,
+}
 
-    (var, trans)
+
+impl ModelBuilder {
+    pub fn from(model: &impl Resource) -> Self {
+        let mut mb = ModelBuilder {
+            variables: vec![],
+            transitions: vec![],
+            messages: vec![],
+        };
+        mb.variables.extend(model.get_variables());
+        mb
+    }
+
+    pub fn make_tsm(&self) -> TransitionSystemModel {
+        let mut tsm = TransitionSystemModel::default();
+        tsm.vars.extend(self.variables.clone());
+        tsm.transitions.extend(get_formal_transitions(&self.transitions));
+        tsm
+    }
+
+    pub fn get_initial_state(&self) -> SPState {
+        SPState::new_from_variables(&self.variables)
+    }
+
+    pub fn add_message(&mut self, m: Message) {
+        self.messages.push(m);
+    }
+
+    /// Operations can abstract away implementation details from the planner.
+    /// By defaut, only i -> e -> i are included in the formal representation.
+    pub fn add_operation(&mut self,
+                         path: SPPath,
+                         formal_pre: Predicate,
+                         formal_actions: Vec<Action>,
+                         runner_pre: Predicate,
+                         runner_actions: Vec<Action>,
+                         formal_post: Predicate,
+                         formal_post_actions: Vec<Action>,
+                         runner_post: Predicate,
+                         runner_post_actions: Vec<Action>) -> SPPath {
+        let mut var = Variable::new(path.clone(), SPValueType::String,
+                                    vec!["i".to_spvalue(),
+                                         "e".to_spvalue(),
+                                         "f".to_spvalue()]);
+        var.initial_state = "i".to_spvalue();
+        let formal_pre = p!([path == "i"] && [formal_pre]);
+        let mut formal_actions = formal_actions.clone();
+        formal_actions.push(a!(path = "e"));
+
+        let formal_post = p!([path == "e"] && [formal_post]);
+        let mut formal_post_actions = formal_post_actions.clone();
+        formal_post_actions.push(a!(path = "f"));
+
+        let trans = vec![
+            ModelTransition {
+                transitions: vec![
+                    (Transition::new(path.add_child("formal_start".into()), formal_pre, formal_actions),
+                     TransitionType::Controlled),
+                    (Transition::new(path.add_child("runner_start".into()), runner_pre, runner_actions),
+                     TransitionType::Runner),
+                ]
+            },
+            ModelTransition {
+                transitions: vec![
+                    (Transition::new(path.add_child("formal_finish".into()), formal_post, formal_post_actions),
+                     TransitionType::Auto),
+                    (Transition::new(path.add_child("runner_finish".into()), runner_post, runner_post_actions),
+                     TransitionType::Runner),
+                ]
+            }
+        ];
+
+        let path = var.path.clone();
+        self.variables.push(var);
+        self.transitions.extend(trans);
+        path
+    }
+
 }

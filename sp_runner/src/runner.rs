@@ -8,17 +8,25 @@ use std::sync::{Arc, Mutex};
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct RunnerModel {
+    /// Initial runnner state
+    pub initial_state: SPState,
+
+    /// Resource communication defintions.
+    pub messages: Vec<Message>,
+
+    /// Low level planning model
     pub tsm: TransitionSystemModel,
 }
 
 impl RunnerModel {
-    // TODO: finish this.
-    pub fn from(model: &impl Resource) -> Self {
-        let vars = model.get_variables();
+    pub fn from(model: ModelBuilder) -> Self {
         let mut tsm = TransitionSystemModel::default();
+        let vars = model.variables.clone();
         tsm.vars.extend(vars);
         RunnerModel {
-            tsm
+            initial_state: model.get_initial_state(),
+            messages: model.messages,
+            tsm,
         }
     }
 }
@@ -30,30 +38,29 @@ pub enum SPRunnerInput {
     NewPlan(Vec<SPPath>),
 }
 
-pub async fn launch_model(model: impl Resource, initial_state: SPState) -> Result<(), SPError> {
+pub async fn launch_model(runner_model: RunnerModel) -> Result<(), SPError> {
     log_info!("startar SP!");
 
     let (tx_runner, rx_runner) = tokio::sync::mpsc::channel(2);
     let (tx_new_state, rx_new_state) = tokio::sync::mpsc::channel(2);
-    let (tx_runner_state, rx_runner_state) = tokio::sync::watch::channel(initial_state.clone());
+    let (tx_runner_state, rx_runner_state) = tokio::sync::watch::channel(runner_model.initial_state.clone());
 
 
     tokio::spawn(merger(rx_new_state, tx_runner.clone()));
-    tokio::spawn(ticker_async(std::time::Duration::from_millis(200), tx_runner.clone()));
+    tokio::spawn(ticker_async(std::time::Duration::from_millis(1000), tx_runner.clone()));
 
     let _ros_comm = sp_ros::RosComm::new(
         rx_runner_state.clone(),
         tx_new_state.clone(),
-        model.clone(),
+        &runner_model.messages
     ).await?;
 
-    let runner_model = RunnerModel::from(&model);
+
     let transition_planner = TransitionPlanner::from(&runner_model);
 
     let runner_handle = tokio::spawn(async move {
         runner(
             &runner_model,
-            initial_state,
             rx_runner,
             tx_runner_state,
         ).await;
@@ -66,6 +73,7 @@ pub async fn launch_model(model: impl Resource, initial_state: SPState) -> Resul
             transition_planner,
         ).await;
     });
+
 
     let err = runner_handle.await; //let err = tokio::try_join!(runner_handle, planner_handle);
 
@@ -99,7 +107,7 @@ async fn planner(
                         if let Some(plan) = plan {
                             println!("new plan computed");
                             let cmd = SPRunnerInput::NewPlan(plan);
-                            t_tx_input.send(cmd).await;
+                            let _res = t_tx_input.send(cmd).await;
                         }
                     }
                 },
@@ -108,9 +116,9 @@ async fn planner(
     });
 }
 
+
 async fn runner(
     model: &RunnerModel,
-    initial_state: SPState,
     mut rx_input: tokio::sync::mpsc::Receiver<SPRunnerInput>,
     tx_state_out: tokio::sync::watch::Sender<SPState>
 ) {
@@ -118,57 +126,53 @@ async fn runner(
 
     let mut now = Instant::now();
 
+    let mut ticker = crate::Ticker::default();
+    ticker.state = model.initial_state.clone();
+
     loop {
+        let mut state_has_probably_changed = false;
+        let mut ticked = false;
+        let mut last_fired_transitions = vec![];
         let input = rx_input.recv().await;
         if let Some(input) = input {
             match input {
                 SPRunnerInput::StateChange(s) => {
-                    // if !runner.state().are_new_values_the_same(&s) {
-                    //     last_fired_transitions = runner.take_a_tick(s, false);
-                    //     state_has_probably_changed = true;
-                    // } else {
-                    //     runner.update_state_variables(s);
-                    // }
+                    if !ticker.state.are_new_values_the_same(&s) {
+                        let state_id = ticker.state.id();
+                        ticker.state.extend(s);
+                        if state_id != ticker.state.id() {
+                            // changed_variables have added a new variable
+                            ticker.update_state_paths();
+                        }
+
+                        last_fired_transitions = ticker.tick_transitions();
+                        state_has_probably_changed = true;
+                    } else {
+                        ticker.update_state_paths();
+                    }
                 },
                 SPRunnerInput::Tick => {
-                    // last_fired_transitions = runner.take_a_tick(SPState::new(), true);
-                    // ticked = true;
+                    // log_info!("Ticked");
+                    last_fired_transitions = ticker.tick_transitions();
+                    ticked = true;
                 },
-                SPRunnerInput::NewPlan(plan) => {
+                SPRunnerInput::NewPlan(_plan) => {
                     // runner.set_plan(plan_name, plan);
                 },
             }
 
-            now = Instant::now();
+            // if there's nothing to do in this cycle, continue
+            if !state_has_probably_changed && last_fired_transitions.is_empty() && !ticked {
+                continue;
+            } else {
+                // println!("state changed? {}", state_has_probably_changed);
+                // println!("transition fired? {}", !last_fired_transitions.is_empty());
+                // println!("ticked? {}", ticked);
+            }
 
-            // // if there's nothing to do in this cycle, continue
-            // if !state_has_probably_changed && last_fired_transitions.is_empty() && !ticked {
-            //     continue;
-            // } else {
-            //     // println!("state changed? {}", state_has_probably_changed);
-            //     // println!("transition fired? {}", !runner.last_fired_transitions.is_empty());
-            //     // println!("ticked? {}", ticked);
-            // }
+            println!("{}", ticker.state);
 
-            // let mut s = runner.ticker.state.clone();
-
-            // if !last_fired_transitions.is_empty() {
-            //     let f = last_fired_transitions.iter().fold(String::new(), |a, t| {
-            //         if a.is_empty() {
-            //             t.to_string()
-            //         } else {
-            //             format!{"{}, {}", a, t}
-            //         }
-            //     });
-            //     s.add_variable(SPPath::from_string("sp/fired"), f.to_spvalue());
-            //     println!("fired:");
-            //     last_fired_transitions
-            //         .iter()
-            //         .for_each(|x| println!("{:?}", x));
-            // }
-
-
-//            tx_state_out.send(s);
+            let _res = tx_state_out.send(ticker.state.clone());
         }
 
     }
@@ -219,11 +223,11 @@ async fn merger(
                 for y in states {
                     if let Some(other) =  try_extend(&mut x, y) {
                         // Can not be merged so sending what we have
-                        tx_runner.send(SPRunnerInput::StateChange(x.clone())).await;
+                        let _res = tx_runner.send(SPRunnerInput::StateChange(x.clone())).await;
                         x = other;
                     }
                 }
-                tx_runner.send(SPRunnerInput::StateChange(x)).await;
+                let _res = tx_runner.send(SPRunnerInput::StateChange(x)).await;
             }
         }
     });
@@ -248,12 +252,11 @@ fn try_extend(state: &mut SPState, other_state: SPState) -> Option<SPState> {
 }
 
 /// The ticker that sends a tick to the runner at an interval defined by ´freq´
-async fn ticker_async(freq: Duration, tx_runner: tokio::sync::mpsc::Sender<SPRunnerInput>) {
-    let mut ticker = tokio::time::interval(freq);
+async fn ticker_async(period: Duration, tx_runner: tokio::sync::mpsc::Sender<SPRunnerInput>) {
+    let mut ticker = tokio::time::interval(period);
     ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
     loop {
-        //log_info!("Ticker");
         ticker.tick().await;
-        tx_runner.send(SPRunnerInput::Tick).await;
+        let _res = tx_runner.send(SPRunnerInput::Tick).await;
     }
 }
