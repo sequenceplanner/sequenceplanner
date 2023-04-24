@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 pub use sp_model_derive::Resource;
 pub trait Resource {
     fn new(name: &str) -> Self;
-    fn get_variables(&self) -> Vec<Variable>;
+    fn get_variables(&self) -> Vec<ModelVariable>;
     fn get_input_mapping(&self) -> Vec<(SPPath, SPPath)>;
     fn get_output_mapping(&self) -> Vec<(SPPath, SPPath)>;
 
@@ -91,6 +91,45 @@ impl MessageVariable {
     }
 }
 
+#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
+pub enum ModelVariable {
+    Formal(Variable),
+    Runner(Variable),
+}
+
+
+impl ModelVariable {
+    pub fn to_variable(self) -> Variable {
+        match self {
+            ModelVariable::Formal(v) => v,
+            ModelVariable::Runner(v) => v,
+        }
+    }
+}
+
+pub fn get_formal_variables(mvs: &[ModelVariable]) -> Vec<Variable> {
+    let mut vars = vec![];
+    for v in mvs {
+        if let ModelVariable::Formal(v) = v {
+            vars.push(v.clone());
+        }
+    }
+    vars
+}
+
+pub fn get_runner_variables(mvs: &[ModelVariable]) -> Vec<Variable> {
+    let mut vars = vec![];
+    for v in mvs {
+        if let ModelVariable::Runner(v) = v {
+            vars.push(v.clone());
+        }
+    }
+    vars
+}
+
+pub fn get_all_variables(mvs: &[ModelVariable]) -> Vec<Variable> {
+    mvs.into_iter().map(|v| v.clone().to_variable()).collect()
+}
 
 #[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
 pub enum TransitionType {
@@ -127,10 +166,22 @@ pub fn get_formal_transitions(mts: &[ModelTransition]) -> Vec<Transition> {
     trans
 }
 
+pub fn get_runner_transitions(mts: &[ModelTransition]) -> Vec<Transition> {
+    let mut trans = vec![];
+    for mt in mts {
+        for (t, tt) in &mt.transitions {
+            if *tt == TransitionType::Runner {
+                trans.push(t.clone());
+            }
+        }
+    }
+    trans
+}
+
 
 #[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
 pub struct ModelBuilder {
-    pub variables: Vec<Variable>,
+    pub variables: Vec<ModelVariable>,
     pub transitions: Vec<ModelTransition>,
 
     pub messages: Vec<Message>,
@@ -150,13 +201,14 @@ impl ModelBuilder {
 
     pub fn make_tsm(&self) -> TransitionSystemModel {
         let mut tsm = TransitionSystemModel::default();
-        tsm.vars.extend(self.variables.clone());
+        let formal_vars = get_formal_variables(&self.variables);
+        tsm.vars.extend(formal_vars);
         tsm.transitions.extend(get_formal_transitions(&self.transitions));
         tsm
     }
 
     pub fn get_initial_state(&self) -> SPState {
-        SPState::new_from_variables(&self.variables)
+        SPState::new_from_variables(&get_all_variables(&self.variables))
     }
 
     pub fn add_message(&mut self, m: Message) {
@@ -208,9 +260,23 @@ impl ModelBuilder {
         ];
 
         let path = var.path.clone();
-        self.variables.push(var);
+        self.variables.push(ModelVariable::Formal(var));
         self.transitions.extend(trans);
         path
     }
+
+    pub fn add_runner_transition(&mut self,
+                                 path: SPPath,
+                                 guard: Predicate,
+                                 actions: Vec<Action>) {
+        let transition = ModelTransition {
+            transitions: vec![
+                (Transition { path, guard, actions },
+                 TransitionType::Runner)
+            ]
+        };
+        self.transitions.push(transition);
+    }
+
 
 }

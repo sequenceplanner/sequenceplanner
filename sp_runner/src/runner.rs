@@ -3,7 +3,7 @@ use sp_domain::*;
 use sp_model::*;
 use sp_ros::*;
 use sp_formal::*;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 use std::sync::{Arc, Mutex};
 
 #[derive(Debug, PartialEq, Clone)]
@@ -16,17 +16,22 @@ pub struct RunnerModel {
 
     /// Low level planning model
     pub tsm: TransitionSystemModel,
+
+    /// Runner transitions
+    pub runner_transitions: Vec<Transition>,
 }
 
 impl RunnerModel {
     pub fn from(model: ModelBuilder) -> Self {
         let mut tsm = TransitionSystemModel::default();
-        let vars = model.variables.clone();
-        tsm.vars.extend(vars);
+        let formal_vars = get_formal_variables(&model.variables);
+        tsm.vars.extend(formal_vars);
+        let runner_transitions = get_runner_transitions(&model.transitions);
         RunnerModel {
             initial_state: model.get_initial_state(),
             messages: model.messages,
             tsm,
+            runner_transitions,
         }
     }
 }
@@ -58,27 +63,32 @@ pub async fn launch_model(runner_model: RunnerModel) -> Result<(), SPError> {
 
     let transition_planner = TransitionPlanner::from(&runner_model);
 
+    let tx_runner_task = tx_runner.clone();
     let runner_handle = tokio::spawn(async move {
         runner(
             &runner_model,
+            tx_runner_task,
             rx_runner,
             tx_runner_state,
         ).await;
     });
 
-    let _planner_handle = tokio::spawn(async move {
+    let planner_handle = tokio::spawn(async move {
         planner(
-            tx_runner.clone(),
-            rx_runner_state.clone(),
+            tx_runner,
+            rx_runner_state,
             transition_planner,
         ).await;
     });
 
 
-    let err = runner_handle.await; //let err = tokio::try_join!(runner_handle, planner_handle);
+    log_info!("Before join");
+    let err = tokio::try_join!(runner_handle, planner_handle);
 
+    // Will never get here
     println!("The runner terminated!: {:?}", err);
     log_error!("The SP runner terminated: {:?}", err);
+
     Ok(())
 
 }
@@ -119,17 +129,18 @@ async fn planner(
 
 async fn runner(
     model: &RunnerModel,
+    tx_input: tokio::sync::mpsc::Sender<SPRunnerInput>,
     mut rx_input: tokio::sync::mpsc::Receiver<SPRunnerInput>,
     tx_state_out: tokio::sync::watch::Sender<SPState>
 ) {
     log_info!("Runner start");
 
-    let mut now = Instant::now();
-
     let mut ticker = crate::Ticker::default();
+    ticker.uncontrolled_transitions = model.runner_transitions.clone();
     ticker.state = model.initial_state.clone();
 
     loop {
+        log_info!("Looping");
         let mut state_has_probably_changed = false;
         let mut ticked = false;
         let mut last_fired_transitions = vec![];
@@ -144,7 +155,6 @@ async fn runner(
                             // changed_variables have added a new variable
                             ticker.update_state_paths();
                         }
-
                         last_fired_transitions = ticker.tick_transitions();
                         state_has_probably_changed = true;
                     } else {
@@ -152,7 +162,7 @@ async fn runner(
                     }
                 },
                 SPRunnerInput::Tick => {
-                    // log_info!("Ticked");
+                    log_info!("Ticked");
                     last_fired_transitions = ticker.tick_transitions();
                     ticked = true;
                 },
@@ -170,6 +180,8 @@ async fn runner(
                 // println!("ticked? {}", ticked);
             }
 
+
+            println!("{:?}", last_fired_transitions);
             println!("{}", ticker.state);
 
             let _res = tx_state_out.send(ticker.state.clone());
@@ -210,7 +222,7 @@ async fn merger(
     let ms_out = ms_arc.clone();
     tokio::spawn(async move {
         loop {
-            rx.changed().await;
+            let _result = rx.changed().await;
             let mut states = {
                 let mut x = ms_out.lock().unwrap();
                 let res = x.states.clone();

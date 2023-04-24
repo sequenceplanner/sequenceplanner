@@ -45,7 +45,7 @@ struct Model {
 fn make_model() {
     let model: Model = Model::new("model");
     let vars = model.get_variables();
-    let mut state = SPState::new_from_variables(&vars);
+    let mut state = SPState::new_from_variables(&get_all_variables(&vars));
     println!("initial_state:\n{}", state);
 
     let input_mapping = model.resource1.setup_inputs("test_input_topic", "std_msgs/msg/String");
@@ -96,7 +96,7 @@ fn model_and_planner() {
 
     let m: Model = Model::new("m");
 
-    let vars = m.get_variables();
+    let vars = get_all_variables(&m.get_variables());
     let state = SPState::new_from_variables(&vars);
 
     let mut tsm = TransitionSystemModel::default();

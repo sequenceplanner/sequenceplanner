@@ -153,10 +153,18 @@ mod ros {
 
     pub struct RosComm {
         arc_node: Arc<Mutex<r2r::Node>>,
-        spin_handle: tokio::task::JoinHandle<()>,
+        spin_thread: Arc<Mutex<bool>>,
         // sp_state: SPStateService,
 //        sp_model: SPModelService,
         resources: Arc<Mutex<Vec<ResourceComm>>>,
+    }
+
+    /// 🤔
+    impl Drop for RosComm {
+        fn drop(&mut self) {
+            self.abort();
+            log_error!("ROS threads have been stopped.");
+        }
     }
 
     impl RosComm {
@@ -190,21 +198,21 @@ mod ros {
             // ).await;
 
             let task_arc_node = arc_node.clone();
-            let spin_handle = tokio::task::spawn_blocking( move || {
-                std::thread::sleep(std::time::Duration::from_millis(100));
-                loop {
+            let spin_thread = Arc::new(Mutex::new(true));
+            let task_spin_thread = spin_thread.clone();
+            let _spin_handle = tokio::task::spawn_blocking( move || {
+                while *task_spin_thread.lock().unwrap() {
                     {
                         let mut node = task_arc_node.lock().unwrap();
                         node.spin_once(std::time::Duration::from_millis(10));
                     }
                     std::thread::sleep(std::time::Duration::from_millis(10));
-
                 }
             });
 
             let rc = RosComm {
                 arc_node,
-                spin_handle,
+                spin_thread,
 //                sp_state,
                 resources,
             };
@@ -217,14 +225,14 @@ mod ros {
         pub fn abort(&self)   {
             // self.sp_model.abort();
             // self.sp_state.abort();
-            self.spin_handle.abort();
+            *self.spin_thread.lock().unwrap() = false;
             let rs = self.resources.lock().unwrap();
             rs.iter().for_each(|r| r.abort());
         }
         pub async fn abort_and_await(&mut self) -> Result<(), SPError>  {
             // self.sp_model.abort_and_await().await?;
             // self.sp_state.abort_and_await().await?;
-            self.spin_handle.abort();
+            *self.spin_thread.lock().unwrap() = false;
             let mut rs = vec!();
             std::mem::swap(&mut *self.resources.lock().unwrap(), &mut rs);
 

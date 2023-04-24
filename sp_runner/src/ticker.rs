@@ -20,6 +20,7 @@ impl Ticker {
         if let Some(p) = self.tick_first_controlled() {
             fired.push(p);
         }
+        self.state.take_transition();
         fired
     }
 

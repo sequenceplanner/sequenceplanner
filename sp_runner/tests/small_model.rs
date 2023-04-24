@@ -3,7 +3,7 @@ use sp_model::*;
 use sp_runner::*;
 
 #[tokio::test]
-async fn launch_empty_model() {
+async fn launch_small_model() {
     #[derive(Resource)]
     struct Inner {
         #[Variable(type = "String", initial = "hej", domain = "hej svejs")]
@@ -30,15 +30,21 @@ async fn launch_empty_model() {
 
     mb.add_message(m.setup_outputs("output_topic", "std_msgs/msg/String"));
     let inputs = m.setup_inputs("input_topic", "std_msgs/msg/String");
-    println!("{:?}", inputs);
+//    println!("{:?}", inputs);
     mb.add_message(inputs);
     let inputs = m.inner.setup_inputs("input_topic2", "std_msgs/msg/String");
-    println!("{:?}", inputs);
+//    println!("{:?}", inputs);
     mb.add_message(inputs);
+
+    // Add some transitions
+    mb.add_runner_transition("t1".into(), p!(m.output == "hej"),
+                             vec![a!(m.output = "svejs")]);
+    mb.add_runner_transition("t2".into(), p!(m.output == "svejs"),
+                             vec![a!(m.output = "hej")]);
 
     // Launch and run for two seconds.
     let rm = RunnerModel::from(mb);
     let r = launch_model(rm);
-    let t = tokio::time::timeout(std::time::Duration::from_millis(2000), r).await;
+    let t = tokio::time::timeout(std::time::Duration::from_millis(5000), r).await;
     println!("Timeout: {:?}", t);
 }

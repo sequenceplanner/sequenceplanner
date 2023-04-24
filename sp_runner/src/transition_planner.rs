@@ -599,7 +599,6 @@ impl TransitionPlanner {
     }
 
     pub fn from(model: &RunnerModel) -> Self {
-
         let simulation_ticker = Ticker::default();
 
         let tp = TransitionPlanner {

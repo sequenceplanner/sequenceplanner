@@ -194,7 +194,6 @@ impl SubscriberComm {
             Ok(mut sub) => {
                 let sender = self.state_to_runner.clone();
                 let mess = self.mess.clone();
-                println!("mess: {:?}", mess);
                 let handle = tokio::task::spawn(async move {
                     loop {
                         let msg = sub
@@ -826,14 +825,14 @@ fn ros_to_state(
         let p =  v.path.clone();
 
         let value = msg_state.sp_value_from_path(&v.ros_path);
-        // if value.is_none() {
-        //     log_error!(
-        //         "Not in msg: Name {:?}, path: {}, state: {:?}",
-        //         &v.ros_path,
-        //         &p,
-        //         &msg_state
-        //     );
-        // }
+        if value.is_none() {
+            log_error!(
+                "Not in msg: Name {:?}, path: {}, state: {:?}",
+                &v.ros_path,
+                &p,
+                &msg_state
+            );
+        }
         value.map(|v|(p, v.clone()))
     })
     .collect();
