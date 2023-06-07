@@ -888,6 +888,18 @@ pub fn binary_expr_to_action(lhs: &PredicateValue, rhs: &PredicateValue) -> Acti
     }
 }
 
+pub fn binary_expr_negation(lhs: &PredicateValue, rhs: &PredicateValue) -> Action {
+    match (lhs, rhs) {
+        (PredicateValue::SPPath(p, _), pv) =>
+            Action::new(
+                p.clone(),
+                Compute::Predicate(Predicate::NOT(Box::new(
+                    Predicate::EQ(pv.clone(), PredicateValue::SPValue(true.to_spvalue()))))),
+            ),
+        _ => panic!("negation not supported {lhs:?} = ! {rhs:?} (variable should be on left hand side)")
+    }
+}
+
 pub fn unary_expr_to_action(lhs: &PredicateValue, c: Compute) -> Action {
     match lhs {
         PredicateValue::SPPath(p, _) =>
@@ -901,12 +913,23 @@ pub fn unary_expr_to_action(lhs: &PredicateValue, c: Compute) -> Action {
 
 #[macro_export]
 macro_rules! a {
+    ([ $lhs:expr ] = ! [ $rhs:expr ]) => {{
+        let lhs = $lhs .to_predicate_value();
+        let rhs = $rhs .to_predicate_value();
+        binary_expr_negation(&lhs, &rhs)
+    }};
+
     ([ $lhs:expr ] = [ $rhs:expr ]) => {{
         let lhs = $lhs .to_predicate_value();
         let rhs = $rhs .to_predicate_value();
         binary_expr_to_action(&lhs, &rhs)
     }};
 
+    ([ $lhs:expr ] = ! $($rhs:tt).+) => {{
+        let lhs = $lhs .to_predicate_value();
+        let rhs = $($rhs).+ .to_predicate_value();
+        binary_expr_negation(&lhs, &rhs)
+    }};
 
     ([ $lhs:expr ] = $($rhs:tt).+) => {{
         let lhs = $lhs .to_predicate_value();
@@ -914,10 +937,22 @@ macro_rules! a {
         binary_expr_to_action(&lhs, &rhs)
     }};
 
+    ($($lhs:tt).+ = ! [ $rhs:expr ]) => {{
+        let lhs = $($lhs).+ .to_predicate_value();
+        let rhs = $rhs .to_predicate_value();
+        binary_expr_negation(&lhs, &rhs)
+    }};
+
     ($($lhs:tt).+ = [ $rhs:expr ]) => {{
         let lhs = $($lhs).+ .to_predicate_value();
         let rhs = $rhs .to_predicate_value();
         binary_expr_to_action(&lhs, &rhs)
+    }};
+
+    ($($lhs:tt).+ = ! $($rhs:tt).+) => {{
+        let lhs = $($lhs).+ .to_predicate_value();
+        let rhs = $($rhs).+ .to_predicate_value();
+        binary_expr_negation(&lhs, &rhs)
     }};
 
     ($($lhs:tt).+ = $($rhs:tt).+) => {{
@@ -1239,5 +1274,21 @@ mod sp_value_test {
 
         let x = a!("p: hello" ?);
         println!("{x}");
+
+        let x = a!("p: hello" = !r.variable);
+        println!("{x}");
+
+        let x = a!("p: hello" = ! "p: hello");
+        println!("{x}");
+
+        let x = a!([Test::fun_v()] = ! var);
+        println!("{x}");
+
+        let x = a!([Test::fun_v()] = ! [Test::fun_v()]);
+        println!("{x}");
+
+        let x = a!(var = ! [Test::fun_v()]);
+        println!("{x}");
+
     }
 }
