@@ -69,7 +69,6 @@ fn make_model() {
     assert!(pred.eval(&state));
 }
 
-
 #[test]
 fn model_and_planner() {
     #[derive(Resource)]

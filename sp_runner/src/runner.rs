@@ -23,14 +23,11 @@ pub struct RunnerModel {
 
 impl RunnerModel {
     pub fn from(model: ModelBuilder) -> Self {
-        let mut tsm = TransitionSystemModel::default();
-        let formal_vars = get_formal_variables(&model.variables);
-        tsm.vars.extend(formal_vars);
-        let runner_transitions = get_runner_transitions(&model.transitions);
+        let runner_transitions = make_runner_transitions(&model.transitions);
         RunnerModel {
             initial_state: model.get_initial_state(),
-            messages: model.messages,
-            tsm,
+            messages: model.messages.clone(),
+            tsm: model.make_tsm(),
             runner_transitions,
         }
     }
@@ -179,7 +176,6 @@ async fn runner(
                 // println!("transition fired? {}", !last_fired_transitions.is_empty());
                 // println!("ticked? {}", ticked);
             }
-
 
             println!("{:?}", last_fired_transitions);
             println!("{}", ticker.state);

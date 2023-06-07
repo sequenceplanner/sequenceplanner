@@ -166,14 +166,32 @@ pub fn get_formal_transitions(mts: &[ModelTransition]) -> Vec<Transition> {
     trans
 }
 
-pub fn get_runner_transitions(mts: &[ModelTransition]) -> Vec<Transition> {
+/// Perhaps this should live in the runner code. 🤔
+/// Anyway. Here we want to merge the transitions
+/// of all types except effects, which are only
+/// relevant for the planner.
+pub fn make_runner_transitions(mts: &[ModelTransition]) -> Vec<Transition> {
     let mut trans = vec![];
     for mt in mts {
+        let mut path = SPPath::default();
+        let mut combined_guards = vec![];
+        let mut combined_actions = vec![];
         for (t, tt) in &mt.transitions {
-            if *tt == TransitionType::Runner {
-                trans.push(t.clone());
+            if path == SPPath::default() {
+                path = t.path.clone();
+            }
+            assert!(t.path == path);
+            if *tt != TransitionType::Effect {
+                combined_guards.push(t.guard.clone());
+                combined_actions.extend(t.actions.clone());
             }
         }
+        let combined_trans = Transition {
+            path,
+            guard: Predicate::AND(combined_guards),
+            actions: combined_actions,
+        };
+        trans.push(combined_trans);
     }
     trans
 }
@@ -215,7 +233,7 @@ impl ModelBuilder {
         self.messages.push(m);
     }
 
-    /// Operations can abstract away implementation details from the planner.
+    /// Operations can abstract away implementation details ql  o;jqjs from the planner.
     /// By defaut, only i -> e -> i are included in the formal representation.
     pub fn add_operation(&mut self,
                          path: SPPath,

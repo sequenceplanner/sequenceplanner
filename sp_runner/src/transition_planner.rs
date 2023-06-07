@@ -1,8 +1,7 @@
 use sp_domain::*;
 use sp_formal::*;
-use std::time::{Duration,Instant};
+use std::time::Instant;
 use super::*;
-use std::collections::HashSet;
 
 // some planning constants
 const LVL0_MAX_STEPS: u32 = 100;
@@ -13,7 +12,8 @@ pub struct TransitionPlanner {
     pub model: TransitionSystemModel, // planning model
     pub bad_state: bool, // todo.
     pub prev_state: SPState, // to check if something relevant for this planner has changed
-    pub prev_goals: Vec<(Predicate, Option<Predicate>)>, // previous goals
+    // As there are no operations now, we simply have a list of goals.
+    pub goals: Vec<Predicate>,
     pub store: planning::PlanningStore, // cache
     pub disabled_operation_check: Instant,
 
@@ -128,49 +128,12 @@ pub fn check_goals_fast(ticker: &mut Ticker, goals: &[&Predicate]) -> bool {
 // }
 
 impl TransitionPlanner {
-//     /// Get the current goals and invariants given a state.
-//     fn goals(&mut self, state: &SPState) -> Vec<(Predicate, Option<Predicate>)> {
-//         self.operations.iter().filter_map(|op| {
-//             if op.is_executing(state) {
-//                 Some((op.get_goal(Some(state)), None))
-//             } else {
-//                 None
-//             }
-//         }).collect()
-//     }
-
-//     pub fn block_all(&mut self) -> SPPlan {
-//         self.prev_goals.clear();
-//         let block_plan = SPPlan {
-//             plan: planning::block_all(&self.model),
-//             included_trans: Vec::new(),
-//             state_change: SPState::new(),
-//         };
-
-//         // update current plan
-//         self.plan = block_plan.clone();
-
-//         block_plan
-//     }
-
-//     /// Only keep parts of the state that are relevant to this planner.
-//     pub fn filter_state(&self, state: SPState) -> SPState {
-//         // Planning index
-//         let mut to_keep = vec![SPPath::from_slice(&["runner", "plans", "1"])];
-//         // We want to keep any paths contained in our formal model.
-//         to_keep.extend(self.model.get_state_paths());
-//         // As well as the state of any operations in the model.
-//         to_keep.extend(self.operations.iter().map(|o|o.path().clone()).collect::<Vec<_>>());
-
-//         // TODO. temporary effect flags
-//         self.model.transitions.iter().for_each(|t| {
-//             if t.type_ == TransitionType::Effect {
-//                 to_keep.push(t.path().add_parent("effects"));
-//             }
-//         });
-
-//         state.filter_by_paths(&to_keep)
-//     }
+    /// Only keep parts of the state that are relevant to this planner.
+    pub fn filter_state(&self, state: SPState) -> SPState {
+        let to_keep: Vec<SPPath> = self.simulation_ticker.state.projection()
+            .state.into_iter().map(|(p,_)| p.clone()).collect();
+        state.filter_by_paths(&to_keep)
+    }
 
 //     pub fn compute_new_plan(
 //         &mut self,
@@ -606,7 +569,7 @@ impl TransitionPlanner {
             model: model.tsm.clone(),
             bad_state: false,
             prev_state: SPState::new(),
-            prev_goals: vec![],
+            goals: vec![],
             store: planning::PlanningStore::default(),
             disabled_operation_check: std::time::Instant::now(),
             simulation_ticker,

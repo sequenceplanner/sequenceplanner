@@ -503,7 +503,7 @@ impl Drop for ServiceClientComm {
 }
 
 
-
+#[derive(PartialEq)]
 enum ActionState {
         Ok,
         Requesting,
@@ -597,7 +597,7 @@ impl ActionClientComm {
         let state_to_runner = self.state_to_runner.clone();
 
         let handle = tokio::task::spawn(async move {
-            let action_state_path = mess.name.add_child("action");
+            let action_state_path = mess.name.clone(); //.add_child("action");
             log_info!("Starting action: {}", &mess.topic);
 
             let action_state = Arc::new(Mutex::new(ActionState::Ok));
@@ -613,7 +613,11 @@ impl ActionClientComm {
                 if !mess.send_predicate.eval(&state_from_runner.borrow()) {
 
                     if let Some(c) = client_goal.take() {
-                        c.cancel();
+                        // Don't cancel if we are in the succeeded state.
+                        let succeeded: bool = *action_state.lock().unwrap() == ActionState::Succeeded;
+                        if !succeeded {
+                            let _res = c.cancel();
+                        }
                     }
                     client_goal = None;
                     if let Some(h) = action_handle.take() {
