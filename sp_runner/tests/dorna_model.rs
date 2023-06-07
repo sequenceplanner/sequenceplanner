@@ -67,14 +67,14 @@ async fn launch_dorna_model() {
     mb.add_message(action_msg);
 
     // Add some transitions
-    mb.add_runner_transition("call_action".into(),
-                             p!([m.blue_light.action.status == "ok"] && [m.blue_light.blue_light_on == m.blue_light.action.goal.on]),
-                             vec![a!(m.blue_light.action.goal.on = !m.blue_light.action.goal.on),
-                                  a!(m.blue_light.action.call)
-                             ]);
-    mb.add_runner_transition("reset_action".into(),
-                             p!([m.blue_light.action.status == "succeeded"]),
-                             vec![a!(!m.blue_light.action.call)]);
+    mb.add_transition("call_action".into(),
+                      p!([m.blue_light.action.status == "ok"] && [m.blue_light.blue_light_on == m.blue_light.action.goal.on]),
+                      vec![a!(m.blue_light.action.goal.on = !m.blue_light.action.goal.on),
+                           a!(m.blue_light.action.call)
+                      ]);
+    mb.add_transition("reset_action".into(),
+                      p!([m.blue_light.action.status == "succeeded"]),
+                      vec![a!(!m.blue_light.action.call)]);
 
 
     // Launch and run for two seconds.

@@ -1,9 +1,6 @@
 mod ticker;
 pub use ticker::*;
 
-mod transition_planner;
-pub use transition_planner::*;
-
 mod runner;
 pub use runner::*;
 

@@ -1,8 +1,6 @@
-use super::transition_planner::*;
 use sp_domain::*;
 use sp_model::*;
 use sp_ros::*;
-use sp_formal::*;
 use std::time::Duration;
 use std::sync::{Arc, Mutex};
 
@@ -14,21 +12,16 @@ pub struct RunnerModel {
     /// Resource communication defintions.
     pub messages: Vec<Message>,
 
-    /// Low level planning model
-    pub tsm: TransitionSystemModel,
-
-    /// Runner transitions
-    pub runner_transitions: Vec<Transition>,
+    /// Transitions
+    pub transitions: Vec<Transition>,
 }
 
 impl RunnerModel {
     pub fn from(model: ModelBuilder) -> Self {
-        let runner_transitions = make_runner_transitions(&model.transitions);
         RunnerModel {
             initial_state: model.get_initial_state(),
-            messages: model.messages.clone(),
-            tsm: model.make_tsm(),
-            runner_transitions,
+            messages: model.messages,
+            transitions: model.transitions
         }
     }
 }
@@ -58,8 +51,6 @@ pub async fn launch_model(runner_model: RunnerModel) -> Result<(), SPError> {
     ).await?;
 
 
-    let transition_planner = TransitionPlanner::from(&runner_model);
-
     let tx_runner_task = tx_runner.clone();
     let runner_handle = tokio::spawn(async move {
         runner(
@@ -70,17 +61,7 @@ pub async fn launch_model(runner_model: RunnerModel) -> Result<(), SPError> {
         ).await;
     });
 
-    let planner_handle = tokio::spawn(async move {
-        planner(
-            tx_runner,
-            rx_runner_state,
-            transition_planner,
-        ).await;
-    });
-
-
-    log_info!("Before join");
-    let err = tokio::try_join!(runner_handle, planner_handle);
+    let err = runner_handle.await;
 
     // Will never get here
     println!("The runner terminated!: {:?}", err);
@@ -88,39 +69,6 @@ pub async fn launch_model(runner_model: RunnerModel) -> Result<(), SPError> {
 
     Ok(())
 
-}
-
-
-async fn planner(
-    tx_input: tokio::sync::mpsc::Sender<SPRunnerInput>,
-    runner_out: tokio::sync::watch::Receiver<SPState>,
-    mut transition_planner: TransitionPlanner,
-) {
-    let mut t_runner_out = runner_out.clone();
-    let t_tx_input = tx_input.clone();
-
-    tokio::spawn(async move {
-        loop {
-            tokio::select! {
-                _ = t_runner_out.changed() => {
-                    let ro = t_runner_out.borrow().clone();
-                    let mut tpc = transition_planner.clone();
-                    let x = tokio::task::spawn_blocking(move || {
-                        let plan = tpc.compute_new_plan(ro);
-                        (plan, tpc)
-                    }).await;
-                    if let Ok((plan, tpc)) = x {
-                        transition_planner = tpc;
-                        if let Some(plan) = plan {
-                            println!("new plan computed");
-                            let cmd = SPRunnerInput::NewPlan(plan);
-                            let _res = t_tx_input.send(cmd).await;
-                        }
-                    }
-                },
-            }
-        }
-    });
 }
 
 
@@ -133,7 +81,7 @@ async fn runner(
     log_info!("Runner start");
 
     let mut ticker = crate::Ticker::default();
-    ticker.uncontrolled_transitions = model.runner_transitions.clone();
+    ticker.uncontrolled_transitions = model.transitions.clone();
     ticker.state = model.initial_state.clone();
 
     loop {

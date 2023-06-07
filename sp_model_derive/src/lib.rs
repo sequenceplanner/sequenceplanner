@@ -18,12 +18,11 @@ pub fn derive_resource(input: TokenStream) -> TokenStream {
         _ => panic!("expected a struct with named fields"),
     };
 
-    let field_vars: Vec<(syn::Ident, TokenStream2, bool,
+    let field_vars: Vec<(syn::Ident, TokenStream2,
                          Option<TokenStream2>, Option<TokenStream2>)> = fields
         .iter()
         .flat_map(|field| {
             let field_ident: Ident = field.ident.clone()?;
-            let mut is_formal_var = false;
             let mut var_type: Option<TokenStream2> = None;
             let mut initial: Option<TokenStream2> = None;
             let mut domain: Option<String> = None;
@@ -69,11 +68,9 @@ pub fn derive_resource(input: TokenStream) -> TokenStream {
                     }
                 }
 
-                if !attr.path.is_ident("FormalVariable") && !attr.path.is_ident("Variable") {
+                if !attr.path.is_ident("Variable") {
                     continue;
                 }
-
-                is_formal_var = attr.path.is_ident("FormalVariable");
 
                 // TODO: clean up, remove panics.
                 if let Ok(name_value) = name_values {
@@ -173,7 +170,7 @@ pub fn derive_resource(input: TokenStream) -> TokenStream {
                 Some(output_mapping)
             } else { None };
 
-            Some((field_ident, var, is_formal_var, input_mapping, output_mapping))
+            Some((field_ident, var, input_mapping, output_mapping))
         })
         .collect();
 
@@ -194,27 +191,22 @@ pub fn derive_resource(input: TokenStream) -> TokenStream {
 
     let wrapped_variables: Vec<TokenStream2> = field_vars
         .iter()
-        .map(|(f, _, fv, _, _)|
-             if *fv {
-                 quote!(ModelVariable::Formal(self. #f . clone()))
-             } else {
-                 quote!(ModelVariable::Runner(self. #f . clone()))
-             })
+        .map(|(f, _, _, _)| quote!(self. #f . clone()))
         .collect();
 
     let input_mapping: Vec<TokenStream2> = field_vars
         .iter()
-        .flat_map(|(_, _, _, m, _)| m.clone())
+        .flat_map(|(_, _, m, _)| m.clone())
         .collect();
 
     let output_mapping: Vec<TokenStream2> = field_vars
         .iter()
-        .flat_map(|(_, _, _, _, m)| m.clone())
+        .flat_map(|(_, _, _, m)| m.clone())
         .collect();
 
     let make_fields: Vec<TokenStream2> = field_vars
         .into_iter()
-        .map(|(f, v, _, _, _)| quote!(#f : #v))
+        .map(|(f, v, _, _)| quote!(#f : #v))
         .collect();
 
     let nested_variables: Vec<TokenStream2> = nested
@@ -234,8 +226,8 @@ pub fn derive_resource(input: TokenStream) -> TokenStream {
                 }
             }
 
-            fn get_variables(&self) -> Vec<ModelVariable> {
-                let mut vars: Vec<ModelVariable> = vec![];
+            fn get_variables(&self) -> Vec<Variable> {
+                let mut vars: Vec<Variable> = vec![];
                 #( vars.push(#wrapped_variables); )*
                 #( vars.extend(#nested_variables); )*
                 return vars;
