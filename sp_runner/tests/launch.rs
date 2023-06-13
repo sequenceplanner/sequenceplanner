@@ -13,11 +13,11 @@ async fn launch_empty_model() {
 
     #[derive(Resource)]
     struct Model {
-        #[FormalVariable(type = "String", initial = "hej", domain = "hej svejs")]
+        #[Variable(type = "String", initial = "hej", domain = "hej svejs")]
         #[Input(mapping = "data")]
         pub input: Variable,
 
-        #[FormalVariable(type = "String", initial = "hej", domain = "hej svejs")]
+        #[Variable(type = "String", initial = "hej", domain = "hej svejs")]
         #[Output(mapping = "data")]
         pub output: Variable,
 

@@ -13,11 +13,11 @@ async fn launch_small_model() {
 
     #[derive(Resource)]
     struct Model {
-        #[FormalVariable(type = "String", initial = "hej", domain = "hej svejs")]
+        #[Variable(type = "String", initial = "hej", domain = "hej svejs")]
         #[Input(mapping = "data")]
         pub input: Variable,
 
-        #[FormalVariable(type = "String", initial = "hej", domain = "hej svejs")]
+        #[Variable(type = "String", initial = "hej", domain = "hej svejs")]
         #[Output(mapping = "data")]
         pub output: Variable,
 
@@ -37,10 +37,10 @@ async fn launch_small_model() {
     mb.add_message(inputs);
 
     // Add some transitions
-    mb.add_runner_transition("t1".into(), p!(m.output == "hej"),
-                             vec![a!(m.output = "svejs")]);
-    mb.add_runner_transition("t2".into(), p!(m.output == "svejs"),
-                             vec![a!(m.output = "hej")]);
+    mb.add_transition("t1".into(), p!(m.output == "hej"),
+                      vec![a!(m.output = "svejs")]);
+    mb.add_transition("t2".into(), p!(m.output == "svejs"),
+                      vec![a!(m.output = "hej")]);
 
     // Launch and run for two seconds.
     let rm = RunnerModel::from(mb);

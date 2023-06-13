@@ -3,7 +3,6 @@
 use super::*;
 use rand::prelude::*;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 
 #[derive(Debug, PartialEq, Serialize, Deserialize, Clone)]
 pub enum Predicate {
@@ -117,17 +116,6 @@ impl<'a> PredicateValue {
     pub fn path(p: SPPath) -> Self {
         PredicateValue::SPPath(p, None)
     }
-
-    pub fn replace_variable_path(&mut self, mapping: &HashMap<SPPath, SPPath>) {
-        match self {
-            PredicateValue::SPValue(_) => {}
-            PredicateValue::SPPath(op, _) => {
-                if let Some(np) = mapping.get(op) {
-                    *op = np.clone();
-                }
-            }
-        }
-    }
 }
 
 impl PartialEq for Action {
@@ -212,26 +200,6 @@ impl Predicate {
             | Predicate::MEMBER(x, y) => {
                 x.upd_state_path(state);
                 y.upd_state_path(state);
-            }
-        }
-    }
-
-    pub fn replace_variable_path(&mut self, mapping: &HashMap<SPPath, SPPath>) {
-        match self {
-            Predicate::AND(v) | Predicate::OR(v) | Predicate::XOR(v) => {
-                v.iter_mut().for_each(|e| e.replace_variable_path(mapping));
-            }
-            Predicate::NOT(b) => {
-                b.replace_variable_path(mapping);
-            }
-            Predicate::TRUE | Predicate::FALSE => {}
-            Predicate::EQ(pv1, pv2)
-            | Predicate::NEQ(pv1, pv2)
-            | Predicate::TON(pv1, pv2)
-            | Predicate::TOFF(pv1, pv2)
-            | Predicate::MEMBER(pv1, pv2) => {
-                pv1.replace_variable_path(mapping);
-                pv2.replace_variable_path(mapping);
             }
         }
     }
@@ -340,28 +308,6 @@ impl Action {
             Some(sp) if sp.state_id != state.id() => self.state_path = state.state_path(&self.var),
             None => self.state_path = state.state_path(&self.var),
             _ => {}
-        }
-    }
-
-    pub fn replace_variable_path(&mut self, mapping: &HashMap<SPPath, SPPath>) {
-        if let Some(np) = mapping.get(&self.var) {
-            self.var = np.clone();
-        }
-        match &mut self.value {
-            Compute::PredicateValue(pv) => {
-                pv.replace_variable_path(mapping);
-            }
-            Compute::Predicate(p) => {
-                p.replace_variable_path(mapping);
-            }
-            Compute::Function(xs) => {
-                xs.iter_mut().for_each(|(p, v)| {
-                    p.replace_variable_path(mapping);
-                    v.replace_variable_path(mapping);
-                });
-            }
-            Compute::Random(_) => {}
-            Compute::TimeStamp | Compute::Any => {}
         }
     }
 
