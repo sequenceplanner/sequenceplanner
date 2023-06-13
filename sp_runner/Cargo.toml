@@ -16,3 +16,4 @@ tokio = { version = "1", features = ["full"] }
 chrono = { version = "0.4.9", features = ["serde"] }
 sp_ros = { path = "../sp_ros/", features = ["ros"]}
 futures = "0.3.25"
+r2r = { version = "0.7.0" }

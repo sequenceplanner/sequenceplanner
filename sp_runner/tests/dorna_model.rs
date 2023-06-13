@@ -120,14 +120,39 @@ async fn launch_dorna_model() {
     let mut rm = RunnerModel::from(mb);
 
 
-    // Add some async fun.
+    // Start a new ros node just because we can.
+    use r2r;
+    let ctx = r2r::Context::create().expect("could not start ros");
+    let mut node = r2r::Node::create(ctx, "testnode", "").expect("could not create ros node");
+
+    use std::sync::Arc;
+    use tokio::sync::Mutex;
+
+    use r2r::example_interfaces::srv::AddTwoInts;
+    let client = Arc::new(Mutex::new(node.create_client::<AddTwoInts::Service>("/add_two_ints").expect("could not create ros client")));
+    let _ros_handle = tokio::task::spawn_blocking(move || loop {
+        node.spin_once(std::time::Duration::from_millis(100));
+    });
+
+    // Add some async fun for fun.
     let closure: AsyncActionFunction = Box::new(move |state| {
         let _cloned_state = state.clone();
+        let cloned_client = client.clone();
         let mut value = state.sp_value_from_path(&"test".into()).cloned().unwrap_or(0.to_spvalue());
         Box::pin(async move {
+            let int_value: i32 = if let SPValue::Int32(n) = &value { *n } else { 0 };
+
+            let req = AddTwoInts::Request { a: int_value as i64, b: 1 };
+            let mut sum = 0;
+            let cl = cloned_client.lock().await;
+            if let Ok(resp) = cl.request(&req).expect("could not request").await {
+                println!("{}", resp.sum);
+                sum = resp.sum;
+            }
+
             tokio::time::sleep(std::time::Duration::from_millis(1000)).await;
             if let SPValue::Int32(n) = &mut value {
-                *n+=1;
+                *n= sum as i32;
             }
             let state_update = SPState::new_from_values(&[( "test".into(), value)]);
             Ok(state_update)

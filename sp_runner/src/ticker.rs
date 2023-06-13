@@ -56,7 +56,7 @@ impl Ticker {
                 if !self.active_async_transitions.iter().any(|aat| aat.path == at.path) {
                     // Spawn
                     // println!("Spawned async action {}", at.path);
-                    let fut = (at.function)(&self.state); // should this return a "pre"-state with the future?
+                    let fut = (at.function)(&self.state); // should we return a "pre"-state with the future?
                     let runner_tx = self.runner_tx.clone();
                     let handle = tokio::spawn(async move {
                         let result = fut.await;
