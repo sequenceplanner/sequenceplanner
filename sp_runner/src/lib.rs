@@ -10,27 +10,40 @@ use std::boxed::Box;
 use std::future::Future;
 use std::pin::Pin;
 
-type AsyncActionResult = Result<SPState, Box<dyn std::error::Error>>;
+#[derive(Debug, Clone)]
+pub enum AsyncActionError {
+    Other(String),
+}
+
+impl From<&str> for AsyncActionError {
+    fn from(err: &str) -> AsyncActionError {
+        AsyncActionError::Other(err.to_string())
+    }
+}
+
+pub type AsyncActionResult = Result<SPState, AsyncActionError>;
 
 /// The function type of a goose transaction function.
 pub type AsyncActionFunction = Box<
     dyn for<'r> Fn(
             &'r SPState,
-        ) -> Pin<Box<dyn Future<Output = AsyncActionResult> + Send + 'r>>
+        ) -> Pin<Box<dyn Future<Output = AsyncActionResult> + Send>>
         + Send
         + Sync,
 >;
 
 
 pub struct AsyncTransition {
+    pub path: SPPath,
     /// Guard
     pub guard: Predicate,
     /// A required function that is executed each time this transaction runs.
     pub function: AsyncActionFunction,
 }
 impl AsyncTransition {
-    pub fn new(guard: Predicate, function: AsyncActionFunction) -> Self {
+    pub fn new(path: SPPath, guard: Predicate, function: AsyncActionFunction) -> Self {
         AsyncTransition {
+            path,
             guard,
             function,
         }
@@ -38,7 +51,7 @@ impl AsyncTransition {
 }
 
 
-struct AsyncRunner {
+pub struct AsyncRunner {
     pub transactions: Vec<AsyncTransition>,
 }
 
@@ -72,8 +85,8 @@ async fn example() {
         })
     });
 
-    let transaction = AsyncTransition::new(Predicate::TRUE, closure);
-    let transaction2 = AsyncTransition::new(Predicate::TRUE, closure2);
+    let transaction = AsyncTransition::new("t1".into(), Predicate::TRUE, closure);
+    let transaction2 = AsyncTransition::new("t2".into(), Predicate::TRUE, closure2);
     // We need to do the variable dance as scenario.register_transaction returns self and hence moves
     // self out of `scenario`. By storing it in a new local variable and then moving it over
     // we can avoid that error.

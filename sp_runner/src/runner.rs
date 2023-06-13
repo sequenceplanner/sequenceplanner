@@ -4,7 +4,6 @@ use sp_ros::*;
 use std::time::Duration;
 use std::sync::{Arc, Mutex};
 
-#[derive(Debug, PartialEq, Clone)]
 pub struct RunnerModel {
     /// Initial runnner state
     pub initial_state: SPState,
@@ -14,6 +13,9 @@ pub struct RunnerModel {
 
     /// Transitions
     pub transitions: Vec<Transition>,
+
+    /// Async transitions
+    pub async_transitions: Vec<crate::AsyncTransition>,
 }
 
 impl RunnerModel {
@@ -21,7 +23,8 @@ impl RunnerModel {
         RunnerModel {
             initial_state: model.get_initial_state(),
             messages: model.messages,
-            transitions: model.transitions
+            transitions: model.transitions,
+            async_transitions: vec![],
         }
     }
 }
@@ -33,7 +36,7 @@ pub enum SPRunnerInput {
     NewPlan(Vec<SPPath>),
 }
 
-pub async fn launch_model(runner_model: RunnerModel) -> Result<(), SPError> {
+pub async fn launch_model(mut runner_model: RunnerModel) -> Result<(), SPError> {
     log_info!("startar SP!");
 
     let (tx_runner, rx_runner) = tokio::sync::mpsc::channel(2);
@@ -54,7 +57,7 @@ pub async fn launch_model(runner_model: RunnerModel) -> Result<(), SPError> {
     let tx_runner_task = tx_runner.clone();
     let runner_handle = tokio::spawn(async move {
         runner(
-            &runner_model,
+            &mut runner_model,
             tx_runner_task,
             rx_runner,
             tx_runner_state,
@@ -73,16 +76,26 @@ pub async fn launch_model(runner_model: RunnerModel) -> Result<(), SPError> {
 
 
 async fn runner(
-    model: &RunnerModel,
+    model: &mut RunnerModel,
     tx_input: tokio::sync::mpsc::Sender<SPRunnerInput>,
     mut rx_input: tokio::sync::mpsc::Receiver<SPRunnerInput>,
     tx_state_out: tokio::sync::watch::Sender<SPState>
 ) {
     log_info!("Runner start");
 
-    let mut ticker = crate::Ticker::default();
-    ticker.uncontrolled_transitions = model.transitions.clone();
-    ticker.state = model.initial_state.clone();
+    let mut ticker = crate::Ticker {
+        state: model.initial_state.clone(),
+        runner_tx: tx_input.clone(),
+        controlled_transitions: vec![],
+        uncontrolled_transitions: model.transitions.clone(),
+        predicates: vec![],
+        async_transitions: vec![],
+        active_async_transitions: vec![],
+        controlled_queue: vec![],
+    };
+
+    // move async transitions out of runner model.
+    std::mem::swap(&mut ticker.async_transitions, &mut model.async_transitions);
 
     loop {
         log_info!("Looping");

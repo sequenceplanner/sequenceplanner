@@ -117,8 +117,27 @@ async fn launch_dorna_model() {
 
 
     // Launch and run for a few seconds.
-    let rm = RunnerModel::from(mb);
+    let mut rm = RunnerModel::from(mb);
+
+
+    // Add some async fun.
+    let closure: AsyncActionFunction = Box::new(move |state| {
+        let _cloned_state = state.clone();
+        let mut value = state.sp_value_from_path(&"test".into()).cloned().unwrap_or(0.to_spvalue());
+        Box::pin(async move {
+            tokio::time::sleep(std::time::Duration::from_millis(1000)).await;
+            if let SPValue::Int32(n) = &mut value {
+                *n+=1;
+            }
+            let state_update = SPState::new_from_values(&[( "test".into(), value)]);
+            Ok(state_update)
+        })
+    });
+
+    let transition = AsyncTransition::new("t1".into(), Predicate::TRUE, closure);
+    rm.async_transitions.push(transition);
+
     let r = launch_model(rm);
-    let t = tokio::time::timeout(std::time::Duration::from_millis(5000), r).await;
+    let t = tokio::time::timeout(std::time::Duration::from_millis(10000), r).await;
     println!("Timeout: {:?}", t);
 }
