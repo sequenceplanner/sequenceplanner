@@ -3,7 +3,7 @@ use futures::future::FutureExt;
 
 pub struct ActiveAsyncTransition {
     path: SPPath,
-    handle: tokio::task::JoinHandle<crate::AsyncActionResult>,
+    handle: tokio::task::JoinHandle<()>,
 }
 
 pub struct Ticker {
@@ -29,39 +29,36 @@ impl Ticker {
     pub fn tick_transitions(&mut self) -> Vec<SPPath> {
         let mut fired = self.tick_uncontrolled();
 
-        // check for finished async actions
-        let mut state_changes = SPState::new();
+        // clean up finished async actions
         self.active_async_transitions
             .retain_mut(|ActiveAsyncTransition { path: _path, handle }| {
-                let boxed = handle.boxed();
-                if let Some(result) = boxed.now_or_never() {
-                    // println!("Async action {} finished.", path);
-                    if let Ok(Ok(state)) = result {
-                        // println!("Result: {}", state);
-                        state_changes.extend(state);
-                    }
-                    false
-                } else {
-                    true
-                }
+                handle.boxed().now_or_never().is_none()
             });
-        // apply state changes
-        self.state.extend(state_changes);
-        self.state.upd_preds(&self.predicates);
 
-
+        // check for newly spawn async actions
+        let mut state_changes = SPState::new();
         for at in &self.async_transitions {
             if at.guard.eval(&self.state) {
                 // only start if not running already
                 if !self.active_async_transitions.iter().any(|aat| aat.path == at.path) {
                     // Spawn
                     // println!("Spawned async action {}", at.path);
-                    let fut = (at.function)(&self.state); // should we return a "pre"-state with the future?
+                    fired.push(at.path.clone());
+                    let (pre_state, fut) = (at.function)(&self.state);
+                    state_changes.extend(pre_state);
                     let runner_tx = self.runner_tx.clone();
                     let handle = tokio::spawn(async move {
                         let result = fut.await;
-                        let _send_res = runner_tx.send(crate::SPRunnerInput::Tick).await;
-                        result
+                        // Make sure we tick upon completion.
+                        // We could also connect to the state input path, perhaps thats better.
+                        match result {
+                            Ok(state) => {
+                                let _send_res = runner_tx.send(crate::SPRunnerInput::StateChange(state)).await;
+                            }
+                            Err(crate::AsyncActionError::Other(e)) => {
+                                println!("Warning: {e}");
+                            }
+                        }
                     }
                     );
                     self.active_async_transitions.push(ActiveAsyncTransition {
@@ -71,6 +68,9 @@ impl Ticker {
                 }
             }
         }
+        // apply state changes
+        self.state.apply_state_diff(&state_changes);
+        self.state.upd_preds(&self.predicates);
 
         if let Some(p) = self.tick_first_controlled() {
             fired.push(p);

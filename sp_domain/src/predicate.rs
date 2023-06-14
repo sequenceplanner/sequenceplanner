@@ -86,16 +86,6 @@ impl<'a> PredicateValue {
         }
     }
 
-    pub fn sp_value2(&'a self, state: &'a SPState2) -> Option<&'a SPValue> {
-        match self {
-            PredicateValue::SPValue(x) => Some(x),
-            PredicateValue::SPPath(path, _) => {
-                let string = path.path.join(".");
-                state.get(&string)
-            }
-        }
-    }
-
     pub fn upd_state_path(&mut self, state: &SPState) {
         if let PredicateValue::SPPath(path, sp) = self {
             if sp.is_none() {
@@ -389,12 +379,10 @@ impl Default for Compute {
 /// Eval is used to evaluate a predicate (or an operation ).
 pub trait EvaluatePredicate {
     fn eval(&self, state: &SPState) -> bool;
-    fn eval2(&self, state: &SPState2) -> bool;
 }
 
 pub trait NextAction {
     fn next(&self, state: &mut SPState) -> SPResult<()>;
-    fn next2(&self, state: &mut SPState2) -> SPResult<()>;
 }
 
 impl EvaluatePredicate for Predicate {
@@ -503,97 +491,6 @@ impl EvaluatePredicate for Predicate {
               // Predicate::INDOMAIN(value, domain) => {}
         }
     }
-
-    fn eval2(&self, state: &SPState2) -> bool {
-        match self {
-            Predicate::AND(ps) => ps.iter().all(|p| p.eval2(state)),
-            Predicate::OR(ps) => ps.iter().any(|p| p.eval2(state)),
-            Predicate::XOR(ps) => {
-                let mut c = 0;
-                for p in ps.iter() {
-                    if p.eval2(state) {
-                        c += 1;
-                    }
-                }
-                c == 1
-                // ps.iter_mut()
-                //     .filter(|p| p.eval(state))  // for some reason does not filter with &mut
-                //     .count()
-                //     == 1
-            }
-            Predicate::NOT(p) => !p.eval2(state),
-            Predicate::TRUE => true,
-            Predicate::FALSE => false,
-            Predicate::EQ(lp, rp) => {
-                let a = lp.sp_value2(state);
-                let b = rp.sp_value2(state);
-                if let (Some(a), Some(b)) = (a, b) {
-                    a == b
-                } else {
-                    false
-                }
-            }
-            Predicate::NEQ(lp, rp) => {
-                let a = lp.sp_value2(state);
-                let b = rp.sp_value2(state);
-                if let (Some(a), Some(b)) = (a, b) {
-                    a != b
-                } else {
-                    false
-                }
-            }
-            Predicate::TON(lp, rp) => {
-                if let (Some(t), Some(d)) = (lp.sp_value2(state), rp.sp_value2(state)) {
-                    if let SPValue::Time(time) = t {
-                        let current_duration = time.elapsed().unwrap_or_default();
-                        let delay = match d {
-                            SPValue::Float32(x) => *x as i32,
-                            SPValue::Int32(x) => *x,
-                            _ => 0,
-                        };
-                        current_duration.as_millis() > delay.unsigned_abs() as u128
-                    } else {
-                        eprintln!("TON must point to a timestamp, and not: {t:?} i");
-                        false
-                    }
-                } else {
-                    false
-                }
-            }
-            Predicate::TOFF(lp, rp) => {
-                if let (Some(t), Some(d)) = (lp.sp_value2(state), rp.sp_value2(state)) {
-                    if let SPValue::Time(time) = t {
-                        let current_duration = time.elapsed().unwrap_or_default();
-                        let delay = match d {
-                            SPValue::Float32(x) => *x as i32,
-                            SPValue::Int32(x) => *x,
-                            _ => 0,
-                        };
-                        current_duration.as_millis() < delay.unsigned_abs() as u128
-                    } else {
-                        eprintln!("TON must point to a timestamp, and not: {t:?} i");
-                        false
-                    }
-                } else {
-                    false
-                }
-            }
-            Predicate::MEMBER(lp, rp) => {
-                if let (Some(v), Some(xs)) = (lp.sp_value2(state), rp.sp_value2(state)) {
-                    if let SPValue::Array(_, xs) = xs {
-                        xs.contains(v)
-                    } else {
-                        eprintln!("Member must point to an array, and not: {xs:?} i");
-                        false
-                    }
-                } else {
-                    false
-                }
-            } // Predicate::GT(lp, rp) => {}
-              // Predicate::LT(lp, rp) => {}
-              // Predicate::INDOMAIN(value, domain) => {}
-        }
-    }
 }
 
 impl NextAction for Action {
@@ -643,52 +540,6 @@ impl NextAction for Action {
             Ok(())
         }
     }
-
-    fn next2(&self, state: &mut SPState2) -> SPResult<()> {
-        let c = match &self.value {
-            Compute::PredicateValue(pv) => match pv.sp_value2(state).cloned() {
-                Some(x) => Some(x),
-                None => {
-                    eprintln!(
-                        "The action PredicateValue, next did not find a value for variable: {pv:?}"
-                    );
-                    return Err(SPError::No(format!(
-                        "The action PredicateValue, next did not find a value for variable: {pv:?}"
-                    )));
-                }
-            },
-            Compute::Predicate(p) => {
-                let res = p.eval2(state);
-                Some(res.to_spvalue())
-            }
-            Compute::Function(xs) => {
-                let res = xs
-                    .iter()
-                    .find(|(p, _)| p.eval2(state))
-                    .and_then(|(_, v)| v.sp_value2(state));
-                match res {
-                    Some(x) => Some(x.clone()),
-                    None => {
-                        eprintln!("No predicates in the action Function was true: {self:?}");
-                        return Err(SPError::No(format!(
-                            "No predicates in the action Function was true: {self:?}"
-                        )));
-                    }
-                }
-            }
-            Compute::Random(n) => Some(SPValue::Int32(rand::thread_rng().gen_range(0..*n))),
-            Compute::TimeStamp => Some(SPValue::Time(std::time::SystemTime::now())),
-            Compute::Any => None,
-        };
-
-        if let Some(c) = c {
-            let string = self.var.path.join(".");
-            state.insert(string, c);
-            Ok(())
-        } else {
-            Ok(())
-        }
-    }
 }
 
 impl EvaluatePredicate for Action {
@@ -701,10 +552,6 @@ impl EvaluatePredicate for Action {
             Some(x) => !x.has_next(), // MD: I assume we meant to fail if we *already* had a next value for this action
             None => false, // We do not allow actions to add new state variables. But maybe this should change?
         }
-    }
-
-    fn eval2(&self, _state: &SPState2) -> bool {
-        return true;
     }
 }
 

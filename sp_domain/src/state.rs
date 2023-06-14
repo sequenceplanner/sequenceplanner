@@ -7,11 +7,8 @@ use serde::ser::SerializeMap;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 use std::collections::HashMap;
-use rustc_hash::FxHashMap;
 use std::fmt;
 use uuid::Uuid;
-
-pub type SPState2 = FxHashMap<String, SPValue>;
 
 /// Representing a State in SP with variables and their values. The values are
 /// stored in a vec to speed up reading and writing. The position of a value in the
@@ -672,6 +669,22 @@ impl SPState {
                 self.values[p.index].next(v);
             });
             true
+        }
+    }
+
+    /// Applies a state diff as a if it was an action that produced next values
+    pub fn apply_state_diff(&mut self, other: &SPState) {
+        for (p,v) in other.projection().state {
+            match self.state_path(&p) {
+                None => self.add_state_variable(p.clone(), v.clone()),
+                Some(sp) => {
+                    if self.next_is_allowed(&sp) {
+                        self.values[sp.index].next(v.current_value().clone());
+                    } else {
+                        panic!("should never happen...");
+                    }
+                }
+            }
         }
     }
 

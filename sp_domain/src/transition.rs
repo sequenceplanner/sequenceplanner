@@ -46,23 +46,12 @@ impl EvaluatePredicate for Transition {
     fn eval(&self, state: &SPState) -> bool {
         self.guard.eval(state) && self.actions.iter().all(|a| a.eval(state))
     }
-
-    fn eval2(&self, state: &SPState2) -> bool {
-        self.guard.eval2(state)
-    }
 }
 
 impl NextAction for Transition {
     fn next(&self, state: &mut SPState) -> SPResult<()> {
         for a in &self.actions {
             a.next(state)?;
-        }
-        Ok(())
-    }
-
-    fn next2(&self, state: &mut SPState2) -> SPResult<()> {
-        for a in self.actions.iter() {
-            a.next2(state)?;
         }
         Ok(())
     }

@@ -27,7 +27,7 @@ pub type AsyncActionResult = Result<SPState, AsyncActionError>;
 pub type AsyncActionFunction = Box<
     dyn for<'r> Fn(
             &'r SPState,
-        ) -> Pin<Box<dyn Future<Output = AsyncActionResult> + Send>>
+        ) -> (SPState, Pin<Box<dyn Future<Output = AsyncActionResult> + Send>>)
         + Send
         + Sync,
 >;
@@ -72,17 +72,17 @@ async fn example() {
 
     let closure: AsyncActionFunction = Box::new(move |state| {
         let mut cloned_state = state.clone();
-        Box::pin(async move {
+        (SPState::new(), Box::pin(async move {
             cloned_state.add_variable("a.b".into(), 5.to_spvalue());
             tokio::time::sleep(std::time::Duration::from_millis(5000)).await;
             Ok(cloned_state)
-        })
+        }))
     });
 
     let closure2: AsyncActionFunction = Box::new(move |_| {
-        Box::pin(async move {
+        (SPState::new(), Box::pin(async move {
             Ok(state!(["a", "b"] => 9))
-        })
+        }))
     });
 
     let transaction = AsyncTransition::new("t1".into(), Predicate::TRUE, closure);
@@ -100,8 +100,8 @@ async fn example() {
     println!("before my_function: {}", spstate.sp_value_from_path(&"a.b".into()).unwrap());
     let function = &runner.transactions[0].function;
     let function2 = &runner.transactions[1].function;
-    let new_state = function(&spstate).await.expect("function failed");
-    let new_state2 = function2(&spstate).await.expect("function failed");
+    let new_state = function(&spstate).1.await.expect("function failed");
+    let new_state2 = function2(&spstate).1.await.expect("function failed");
     println!("after my_function: {}", new_state.sp_value_from_path(&"a.b".into()).unwrap());
     println!("after my_function2: {}", new_state2.sp_value_from_path(&"a.b".into()).unwrap());
 }

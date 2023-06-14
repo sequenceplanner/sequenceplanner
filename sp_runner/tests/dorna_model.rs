@@ -134,19 +134,21 @@ async fn launch_dorna_model() {
         node.spin_once(std::time::Duration::from_millis(100));
     });
 
-    // Add some async fun for fun.
+
     let closure: AsyncActionFunction = Box::new(move |state| {
         let _cloned_state = state.clone();
         let cloned_client = client.clone();
         let mut value = state.sp_value_from_path(&"test".into()).cloned().unwrap_or(0.to_spvalue());
-        Box::pin(async move {
-            let int_value: i32 = if let SPValue::Int32(n) = &value { *n } else { 0 };
 
+        // Unsure if this should be a proper action.
+        let pre_state = SPState::new_from_values(&[("in_progress".into(), true.to_spvalue())]);
+        (pre_state, Box::pin(async move {
+            let int_value: i32 = if let SPValue::Int32(n) = &value { *n } else { 0 };
             let req = AddTwoInts::Request { a: int_value as i64, b: 1 };
             let mut sum = 0;
             let cl = cloned_client.lock().await;
             if let Ok(resp) = cl.request(&req).expect("could not request").await {
-                println!("{}", resp.sum);
+                println!("Got result here, sleeping 1 sec. {}", resp.sum);
                 sum = resp.sum;
             }
 
@@ -154,12 +156,17 @@ async fn launch_dorna_model() {
             if let SPValue::Int32(n) = &mut value {
                 *n= sum as i32;
             }
-            let state_update = SPState::new_from_values(&[( "test".into(), value)]);
+            println!("Done sleeping, expecting state update now");
+            let state_update = SPState::new_from_values(&[
+                ("test".into(), value),
+                ("in_progress".into(), false.to_spvalue())
+            ]);
             Ok(state_update)
-        })
+        }))
     });
 
-    let transition = AsyncTransition::new("t1".into(), Predicate::TRUE, closure);
+    let in_progress = SPPath::from("in_progress");
+    let transition = AsyncTransition::new("t1".into(), p!(!in_progress), closure);
     rm.async_transitions.push(transition);
 
     let r = launch_model(rm);
