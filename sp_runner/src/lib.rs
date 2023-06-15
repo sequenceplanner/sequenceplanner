@@ -13,11 +13,18 @@ use std::pin::Pin;
 #[derive(Debug, Clone)]
 pub enum AsyncActionError {
     Other(String),
+    Boxed(Box<dyn Error>),
 }
 
 impl From<&str> for AsyncActionError {
     fn from(err: &str) -> AsyncActionError {
         AsyncActionError::Other(err.to_string())
+    }
+}
+
+impl From<Box<dyn Error>> for AsyncActionError {
+    fn from(err: Box<dyn Error>) -> AsyncActionError {
+        AsyncActionError::Boxed(err)
     }
 }
 

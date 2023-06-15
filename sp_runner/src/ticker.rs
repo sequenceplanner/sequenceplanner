@@ -40,6 +40,7 @@ impl Ticker {
         for at in &self.async_transitions {
             if at.guard.eval(&self.state) {
                 // only start if not running already
+                // we could change this to allow starting many times but unsure if good idea.
                 if !self.active_async_transitions.iter().any(|aat| aat.path == at.path) {
                     // Spawn
                     // println!("Spawned async action {}", at.path);

@@ -1,3 +1,7 @@
+use r2r;
+use std::sync::Arc;
+use tokio::sync::Mutex;
+
 use sp_domain::*;
 use sp_model::*;
 use sp_runner::*;
@@ -31,6 +35,48 @@ mod gripper {
     }
 }
 
+mod gripper_async {
+    use super::*;
+
+    #[derive(Resource, Clone)]
+    pub struct Gripper {
+        #[Variable(type = "bool", initial = false)]
+        pub opened: Variable,
+
+        #[Variable(type = "bool", initial = false)]
+        pub opening: Variable,
+
+        #[Variable(type = "bool", initial = false)]
+        pub part_sensor: Variable,
+    }
+
+    impl Gripper {
+        pub fn make_model(self, _mb: &mut ModelBuilder, node: &mut r2r::Node) {
+            use r2r::gripper_msgs::srv::Open;
+            let client = Arc::new(Mutex::new(node.create_client::<Open::Service>("/gripper/open").expect("could not create ros client")));
+
+            let async_action: AsyncActionFunction = Box::new(move |state| {
+                let self_clone = self.clone();
+                let _cloned_state = state.clone();
+                let cloned_client = client.clone();
+                // Set "opening" state.
+                let pre_state = SPState::new_from_values(&[(self_clone.opening.path.clone(), true.to_spvalue())]);
+                (pre_state, Box::pin(async move {
+                    let cl = cloned_client.lock().await;
+                    let result = cl.request(&Open::Request { }).expect("could not request").await?;
+                    let state_update = SPState::new_from_values(&[
+                        (self_clone.opening.path.clone(), false.to_spvalue()),
+                        (self_clone.opened.path.clone(), true.to_spvalue())
+                    ]);
+                    Ok(state_update)
+                }))
+            });
+            let transition = AsyncTransition::new("t1".into(), Predicate::TRUE, async_action);
+            // mb.add_async_transition(transition)
+        }
+    }
+}
+
 mod control_box {
     use super::*;
 
@@ -44,7 +90,7 @@ mod control_box {
     pub struct SetLightAction {
         #[Variable(type = "bool", initial = false)]
         pub call: Variable,
-        #[Variable(type = "string", domain = "ok requesting accepted rejected succeeded aborted requesting_cancel cancelling cancel_rejected timeout")]
+        #[Variable(type = "string")]
         pub status: Variable,
 
         #[Resource]
@@ -77,7 +123,7 @@ async fn launch_dorna_model() {
         pub control_box: control_box::ControlBox,
 
         #[Resource]
-        pub gripper: gripper::Gripper,
+        pub gripper: gripper_async::Gripper,
     }
 
     let m = Model::new("m");
@@ -116,17 +162,11 @@ async fn launch_dorna_model() {
                       vec![a!(!m.control_box.set_light_action.call)]);
 
 
-    // Launch and run for a few seconds.
-    let mut rm = RunnerModel::from(mb);
-
-
-    // Start a new ros node just because we can.
-    use r2r;
+    // Start a new ros node just because we can. (this way we can easily speak mqtt aswell.)
     let ctx = r2r::Context::create().expect("could not start ros");
     let mut node = r2r::Node::create(ctx, "testnode", "").expect("could not create ros node");
 
-    use std::sync::Arc;
-    use tokio::sync::Mutex;
+    m.gripper.make_model(&mut mb, &mut node);
 
     use r2r::example_interfaces::srv::AddTwoInts;
     let client = Arc::new(Mutex::new(node.create_client::<AddTwoInts::Service>("/add_two_ints").expect("could not create ros client")));
@@ -134,8 +174,10 @@ async fn launch_dorna_model() {
         node.spin_once(std::time::Duration::from_millis(100));
     });
 
+    // Launch and run for a few seconds.
+    let mut rm = RunnerModel::from(mb);
 
-    let closure: AsyncActionFunction = Box::new(move |state| {
+    let async_action: AsyncActionFunction = Box::new(move |state| {
         let _cloned_state = state.clone();
         let cloned_client = client.clone();
         let mut value = state.sp_value_from_path(&"test".into()).cloned().unwrap_or(0.to_spvalue());
@@ -166,7 +208,8 @@ async fn launch_dorna_model() {
     });
 
     let in_progress = SPPath::from("in_progress");
-    let transition = AsyncTransition::new("t1".into(), p!(!in_progress), closure);
+    let transition = AsyncTransition::new("t1".into(), p!(!in_progress), async_action);
+
     rm.async_transitions.push(transition);
 
     let r = launch_model(rm);
