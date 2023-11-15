@@ -7,6 +7,11 @@ use sp_model::*;
 use sp_runner::*;
 
 
+fn to_async_action_error(e: impl std::error::Error) -> AsyncActionError {
+    AsyncActionError::Other(e.to_string())
+}
+
+
 mod gripper {
     use super::*;
 
@@ -63,7 +68,8 @@ mod gripper_async {
                 let pre_state = SPState::new_from_values(&[(self_clone.opening.path.clone(), true.to_spvalue())]);
                 (pre_state, Box::pin(async move {
                     let cl = cloned_client.lock().await;
-                    let result = cl.request(&Open::Request { }).expect("could not request").await?;
+                    let req = cl.request(&Open::Request { }).map_err(to_async_action_error)?;
+                    let result = req.await.map_err(to_async_action_error)?;
                     let state_update = SPState::new_from_values(&[
                         (self_clone.opening.path.clone(), false.to_spvalue()),
                         (self_clone.opened.path.clone(), true.to_spvalue())

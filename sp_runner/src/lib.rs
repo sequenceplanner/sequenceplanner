@@ -13,8 +13,19 @@ use std::pin::Pin;
 #[derive(Debug, Clone)]
 pub enum AsyncActionError {
     Other(String),
-    Boxed(Box<dyn Error>),
 }
+
+impl std::error::Error for AsyncActionError {}
+
+use std::fmt::{self, Display, Formatter};
+impl Display for AsyncActionError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match self {
+            AsyncActionError::Other(s) => write!(f, "{s}"),
+        }
+    }
+}
+
 
 impl From<&str> for AsyncActionError {
     fn from(err: &str) -> AsyncActionError {
@@ -22,9 +33,9 @@ impl From<&str> for AsyncActionError {
     }
 }
 
-impl From<Box<dyn Error>> for AsyncActionError {
-    fn from(err: Box<dyn Error>) -> AsyncActionError {
-        AsyncActionError::Boxed(err)
+impl From<Box<dyn std::error::Error>> for AsyncActionError {
+    fn from(e: Box<dyn std::error::Error>) -> AsyncActionError {
+        AsyncActionError::Other(e.to_string())
     }
 }
 
