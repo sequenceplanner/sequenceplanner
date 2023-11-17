@@ -57,7 +57,7 @@ impl Ticker {
                                 let _send_res = runner_tx.send(crate::SPRunnerInput::StateChange(state)).await;
                             }
                             Err(crate::AsyncActionError::Other(e)) => {
-                                println!("Warning: {e}");
+                                println!("Warning: AsyncActionError: {e}");
                             }
                         }
                     }

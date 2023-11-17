@@ -1,8 +1,8 @@
 use sp_domain::*;
 use sp_model::*;
-use sp_ros::*;
 use std::time::Duration;
 use std::sync::{Arc, Mutex};
+use tracing::{info, debug, error};
 
 pub struct RunnerModel {
     /// Initial runnner state
@@ -37,7 +37,7 @@ pub enum SPRunnerInput {
 }
 
 pub async fn launch_model(mut runner_model: RunnerModel) -> Result<(), SPError> {
-    log_info!("startar SP!");
+    info!("startar SP!");
 
     let (tx_runner, rx_runner) = tokio::sync::mpsc::channel(2);
     let (tx_new_state, rx_new_state) = tokio::sync::mpsc::channel(2);
@@ -45,13 +45,13 @@ pub async fn launch_model(mut runner_model: RunnerModel) -> Result<(), SPError> 
 
 
     tokio::spawn(merger(rx_new_state, tx_runner.clone()));
-    tokio::spawn(ticker_async(std::time::Duration::from_millis(1000), tx_runner.clone()));
+    tokio::spawn(ticker_async(std::time::Duration::from_millis(100), tx_runner.clone()));
 
-    let _ros_comm = sp_ros::RosComm::new(
-        rx_runner_state.clone(),
-        tx_new_state.clone(),
-        &runner_model.messages
-    ).await?;
+    // let _ros_comm = sp_ros::RosComm::new(
+    //     rx_runner_state.clone(),
+    //     tx_new_state.clone(),
+    //     &runner_model.messages
+    // ).await?;
 
 
     let tx_runner_task = tx_runner.clone();
@@ -68,7 +68,7 @@ pub async fn launch_model(mut runner_model: RunnerModel) -> Result<(), SPError> 
 
     // Will never get here
     println!("The runner terminated!: {:?}", err);
-    log_error!("The SP runner terminated: {:?}", err);
+    error!("The SP runner terminated: {:?}", err);
 
     Ok(())
 
@@ -81,7 +81,7 @@ async fn runner(
     mut rx_input: tokio::sync::mpsc::Receiver<SPRunnerInput>,
     tx_state_out: tokio::sync::watch::Sender<SPState>
 ) {
-    log_info!("Runner start");
+    info!("Runner start");
 
     let mut ticker = crate::Ticker {
         state: model.initial_state.clone(),
@@ -98,7 +98,7 @@ async fn runner(
     std::mem::swap(&mut ticker.async_transitions, &mut model.async_transitions);
 
     loop {
-        log_info!("Looping");
+        info!("Looping");
         let mut state_has_probably_changed = false;
         let mut ticked = false;
         let mut last_fired_transitions = vec![];
@@ -120,7 +120,7 @@ async fn runner(
                     }
                 },
                 SPRunnerInput::Tick => {
-                    log_info!("Ticked");
+                    info!("Ticked");
                     last_fired_transitions = ticker.tick_transitions();
                     ticked = true;
                 },
@@ -133,9 +133,9 @@ async fn runner(
             if !state_has_probably_changed && last_fired_transitions.is_empty() && !ticked {
                 continue;
             } else {
-                // println!("state changed? {}", state_has_probably_changed);
-                // println!("transition fired? {}", !last_fired_transitions.is_empty());
-                // println!("ticked? {}", ticked);
+                println!("state changed? {}", state_has_probably_changed);
+                println!("transition fired? {}", !last_fired_transitions.is_empty());
+                println!("ticked? {}", ticked);
             }
 
             println!("{:?}", last_fired_transitions);
