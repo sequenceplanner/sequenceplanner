@@ -36,7 +36,13 @@ pub enum SPRunnerInput {
     NewPlan(Vec<SPPath>),
 }
 
-pub async fn launch_model(mut runner_model: RunnerModel) -> Result<(), SPError> {
+pub struct RunnerInstance {
+    pub state_input: tokio::sync::mpsc::Sender<SPState>,
+    pub state_output: tokio::sync::watch::Receiver<SPState>,
+    pub join_handle: tokio::task::JoinHandle<()>,
+}
+
+pub fn launch_model(mut runner_model: RunnerModel) -> Result<RunnerInstance, SPError> {
     info!("startar SP!");
 
     let (tx_runner, rx_runner) = tokio::sync::mpsc::channel(2);
@@ -46,13 +52,6 @@ pub async fn launch_model(mut runner_model: RunnerModel) -> Result<(), SPError> 
 
     tokio::spawn(merger(rx_new_state, tx_runner.clone()));
     tokio::spawn(ticker_async(std::time::Duration::from_millis(100), tx_runner.clone()));
-
-    // let _ros_comm = sp_ros::RosComm::new(
-    //     rx_runner_state.clone(),
-    //     tx_new_state.clone(),
-    //     &runner_model.messages
-    // ).await?;
-
 
     let tx_runner_task = tx_runner.clone();
     let runner_handle = tokio::spawn(async move {
@@ -64,14 +63,13 @@ pub async fn launch_model(mut runner_model: RunnerModel) -> Result<(), SPError> 
         ).await;
     });
 
-    let err = runner_handle.await;
+    let runner_instance = RunnerInstance {
+        state_input: tx_new_state,
+        state_output: rx_runner_state,
+        join_handle: runner_handle
+    };
 
-    // Will never get here
-    println!("The runner terminated!: {:?}", err);
-    error!("The SP runner terminated: {:?}", err);
-
-    Ok(())
-
+    Ok(runner_instance)
 }
 
 
